@@ -168,8 +168,26 @@ async function openOfficial(rawUrl: string): Promise<void> {
   const panel = vscode.window.createWebviewPanel('appiumInspector.official', `Appium Inspector · ${url.host}`, vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
   officialPanel = panel;
+  let reloadPending = false;
   panel.webview.onDidReceiveMessage(async message => {
     if (message?.bridge !== relay.token) return;
+    if (message.type === 'requestReload') {
+      if (!panel.active || reloadPending) return;
+      reloadPending = true;
+      try {
+        const choice = await vscode.window.showWarningMessage('Inspector を再読み込みしますか？', {
+          modal: true,
+          detail: '未保存の Capabilities・操作状態が失われ、操作中のセッションとの接続が切れる可能性があります。再読込ではサーバー側のセッションは終了しません。必要な設定を保存し、公式UIでセッションを終了してから続行してください。'
+        }, '再読み込みする');
+        if (choice === '再読み込みする' && officialPanel === panel) {
+          await settingsWrites;
+          if (officialPanel === panel) await panel.webview.postMessage({ bridge: relay.token, type: 'reloadConfirmed' });
+        }
+      } catch {
+        void vscode.window.showErrorMessage('Inspector を再読み込みできませんでした。');
+      } finally { reloadPending = false; }
+      return;
+    }
     if (message.type === 'saveSettings') {
       try {
         values = validateSettings(message.values);
@@ -271,6 +289,11 @@ async function stopServer(): Promise<void> {
     throw new Error('この拡張機能から起動した Appium Server はありません。');
   }
   const child = serverProcess;
+  const choice = await vscode.window.showWarningMessage('Appium Server を停止しますか？', {
+    modal: true,
+    detail: 'このサーバー上で実行中のすべてのセッションが利用できなくなります。他のテストにも影響する可能性があります。必要な設定を保存し、公式UIでセッションを終了してから続行してください。'
+  }, '停止する');
+  if (choice !== '停止する' || serverProcess !== child) return;
   output.appendLine('Appium Server を停止します。');
   const closed = waitForProcessExit(child);
   if (!child.kill('SIGTERM')) {

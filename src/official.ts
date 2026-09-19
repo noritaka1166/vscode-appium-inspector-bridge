@@ -25,10 +25,11 @@ const send = type => vscode.postMessage({type, bridge:token});
 document.getElementById('paste').onclick=()=>send('paste');
 document.getElementById('select-all').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'selectAll'},origin);
 document.getElementById('copy').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'copy'},origin);
-document.getElementById('reload').onclick=()=>{frame.src=frame.src;};
+document.getElementById('reload').onclick=()=>send('requestReload');
 window.addEventListener('message',event=>{
   const m=event.data;
   if(!m || m.bridge!==token) return;
+  if(event.source!==frame.contentWindow && m.type==='reloadConfirmed') { frame.src=frame.src; return; }
   if(event.source===frame.contentWindow && event.origin===origin){
     if(['paste','copyText','error','saveSettings'].includes(m.type)) vscode.postMessage(m);
   } else if(event.source!==frame.contentWindow && ['pasteText','copy','copyResult'].includes(m.type)) {
