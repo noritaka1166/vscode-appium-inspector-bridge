@@ -30,7 +30,7 @@ window.addEventListener('message',event=>{
   const m=event.data;
   if(!m || m.bridge!==token) return;
   if(event.source===frame.contentWindow && event.origin===origin){
-    if(['paste','copyText','error'].includes(m.type)) vscode.postMessage(m);
+    if(['paste','copyText','error','saveSettings'].includes(m.type)) vscode.postMessage(m);
   } else if(event.source!==frame.contentWindow && ['pasteText','copy','copyResult'].includes(m.type)) {
     frame.contentWindow.postMessage(m,origin);
   }

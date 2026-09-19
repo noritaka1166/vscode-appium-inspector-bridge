@@ -2,7 +2,7 @@ import { createServer, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 // A loopback-only relay injects the clipboard adapter without changing installed plugin files.
-export async function startInspectorProxy(upstream: URL, adapter: string): Promise<{ url: URL; token: string; close(): void }> {
+export async function startInspectorProxy(upstream: URL, adapter: string, bootstrap?: (token: string) => string): Promise<{ url: URL; token: string; close(): void }> {
   const token = randomUUID();
   const server = createServer((req, res) => {
     const address = server.address();
@@ -27,7 +27,9 @@ export async function startInspectorProxy(upstream: URL, adapter: string): Promi
         incoming.on('end', () => {
           const injection = `<script>${adapter.replace('__BRIDGE_TOKEN__', JSON.stringify(token))}</script>`;
           res.writeHead(200, responseHeaders);
-          res.end(Buffer.concat(chunks).toString('utf8').replace('</body>', injection + '</body>'));
+          let html = Buffer.concat(chunks).toString('utf8');
+          if (bootstrap) html = html.replace(/<head\b[^>]*>/i, head => head + `<script>${bootstrap(token)}</script>`);
+          res.end(html.replace('</body>', injection + '</body>'));
         });
       } else { res.writeHead(incoming.statusCode || 502, responseHeaders); incoming.pipe(res); }
     });

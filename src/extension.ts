@@ -3,6 +3,7 @@ import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { inspectorUrl, officialHtml, launcherHtml } from './official';
 import { startInspectorProxy } from './inspector-proxy';
 import { readFile } from 'node:fs/promises';
+import { settingKeys, validateSettings } from './settings';
 
 let output: vscode.OutputChannel;
 let serverProcess: ChildProcessWithoutNullStreams | undefined;
@@ -12,9 +13,12 @@ let officialPanel: vscode.WebviewPanel | undefined;
 let officialServer = 'http://127.0.0.1:4723';
 let extensionUri: vscode.Uri;
 let clipboardRelay: Awaited<ReturnType<typeof startInspectorProxy>> | undefined;
+let secrets: vscode.SecretStorage;
+let settingsWrites: Promise<void> = Promise.resolve();
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
+  secrets = context.secrets;
   context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.paste', async () => {
     if (officialPanel?.active && clipboardRelay) {
       await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
@@ -133,13 +137,33 @@ async function openOfficial(rawUrl: string): Promise<void> {
     throw new Error('別サーバーを開く場合は、現在の公式 Inspector タブを閉じてから開いてください。');
   }
   const adapter = await readFile(vscode.Uri.joinPath(extensionUri, 'media', 'clipboard-frame.js').fsPath, 'utf8');
-  const relay = await startInspectorProxy(url, adapter);
+  const storageAdapter = await readFile(vscode.Uri.joinPath(extensionUri, 'media', 'storage-frame.js').fsPath, 'utf8');
+  const settingsKey = `inspector.settings.v1:${normaliseServerUrl(rawUrl)}`;
+  await settingsWrites;
+  const saved = await secrets.get(settingsKey);
+  let values = saved ? validateSettings(JSON.parse(saved)) : {};
+  const relay = await startInspectorProxy(url, adapter, token => storageAdapter.replace('__INSPECTOR_STORAGE__', () =>
+    JSON.stringify({ token, keys: settingKeys, values, upstreamPort: url.port || '80' }).replace(/</g, '\\u003c')));
   clipboardRelay = relay;
   const panel = vscode.window.createWebviewPanel('appiumInspector.official', `Appium Inspector · ${url.host}`, vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
   officialPanel = panel;
   panel.webview.onDidReceiveMessage(async message => {
-    if (!panel.active || message?.bridge !== relay.token) return;
+    if (message?.bridge !== relay.token) return;
+    if (message.type === 'saveSettings') {
+      try {
+        values = validateSettings(message.values);
+        const snapshot = JSON.stringify(values);
+        settingsWrites = settingsWrites.then(() => secrets.store(settingsKey, snapshot)).catch(() => {
+          void vscode.window.showErrorMessage('Inspector の設定を保存できませんでした。保存操作をやり直してください。');
+        });
+        await settingsWrites;
+      } catch {
+        void vscode.window.showErrorMessage('Inspector の保存設定が不正、またはサイズ上限（5 MB）を超えています。');
+      }
+      return;
+    }
+    if (!panel.active) return;
     try {
       if (message.type === 'paste') await panel.webview.postMessage({ bridge: relay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
       if (message.type === 'copyText' && typeof message.text === 'string') {
@@ -293,7 +317,8 @@ function postServerState(): void {
   post({ type: 'server', running: Boolean(serverProcess) });
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
   clipboardRelay?.close();
   serverProcess?.kill('SIGTERM');
+  await settingsWrites;
 }
