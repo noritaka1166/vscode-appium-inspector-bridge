@@ -5,6 +5,7 @@ import { startInspectorProxy } from './inspector-proxy';
 import { readFile } from 'node:fs/promises';
 import { settingKeys, validateSettings } from './settings';
 import { checkEnvironment, EnvironmentReport } from './environment';
+import { ConnectionMonitor, probeServer, serverKey } from './connection';
 
 let output: vscode.OutputChannel;
 let serverProcess: ChildProcessWithoutNullStreams | undefined;
@@ -17,10 +18,15 @@ let clipboardRelay: Awaited<ReturnType<typeof startInspectorProxy>> | undefined;
 let secrets: vscode.SecretStorage;
 let settingsWrites: Promise<void> = Promise.resolve();
 let environmentReport: EnvironmentReport | undefined;
+let connectionMonitor: ConnectionMonitor;
+let managedServerUrl: string | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
   secrets = context.secrets;
+  connectionMonitor = new ConnectionMonitor(state => post({ type: 'connection', ...state }),
+    url => Boolean(serverProcess) && managedServerUrl === url, url => probeServer(url, fetch));
+  context.subscriptions.push(connectionMonitor);
   context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.paste', async () => {
     if (officialPanel?.active && clipboardRelay) {
       await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
@@ -53,6 +59,7 @@ class InspectorSidebarProvider implements vscode.WebviewViewProvider {
     webview.onDidReceiveMessage((message: WebviewMessage) => handleMessage(message));
     webviewView.onDidDispose(() => {
       views.delete(webview);
+      if (!views.size) connectionMonitor.dispose();
     });
   }
 }
@@ -62,10 +69,15 @@ async function openInspector(): Promise<void> {
 }
 
 type WebviewMessage =
-  | { type: 'startOfficial' | 'openOfficial'; serverUrl: string }
+  | { type: 'startOfficial' | 'openOfficial' | 'watchServer' | 'reconnect'; serverUrl: string }
   | { type: 'installOfficial' | 'checkEnvironment' | 'ready' | 'stopServer' | 'showOutput' };
 
 async function handleMessage(message: WebviewMessage): Promise<void> {
+  if (message.type === 'watchServer') {
+    try { connectionMonitor.watch(message.serverUrl); }
+    catch { post({ type: 'connection', url: message.serverUrl, status: 'invalid', owner: 'unknown' }); }
+    return;
+  }
   if (message.type === 'ready') {
     postServerState();
     if (environmentReport) post({ type: 'environment', report: environmentReport });
@@ -80,6 +92,14 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
   }
   try {
     switch (message.type) {
+      case 'reconnect': {
+        const url = serverKey(message.serverUrl);
+        connectionMonitor.watch(url);
+        if (!(await probeServer(url, fetch))) throw new Error('Appium Server に接続できません。拡張管理サーバーは「起動して公式 Inspector を開く」、外部サーバーは起動元で起動後に再接続してください。');
+        await openOfficial(message.serverUrl);
+        post({ type: 'notice', level: 'success', text: 'サーバーへの接続を確認しました。セッションは自動復元しません。画面の再読込が必要な場合はInspector上部の「再読込」を使用してください。' });
+        break;
+      }
       case 'checkEnvironment':
         await inspectEnvironment();
         break;
@@ -91,6 +111,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
         break;
       case 'startOfficial':
         inspectorUrl(message.serverUrl);
+        connectionMonitor.watch(message.serverUrl);
         if (!(await isServerReachable(normaliseServerUrl(message.serverUrl)))) {
           const report = await inspectEnvironment();
           if (!report.canStart) throw new Error('起動前チェックで問題が見つかりました。環境チェック結果の対処方法を確認してください。');
@@ -100,6 +121,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
         await openOfficial(message.serverUrl);
         break;
       case 'openOfficial':
+        connectionMonitor.watch(message.serverUrl);
         await openOfficial(message.serverUrl);
         break;
       case 'stopServer':
@@ -123,6 +145,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
 
 function getLoadingLabel(message: WebviewMessage): string | undefined {
   switch (message.type) {
+    case 'reconnect': return 'Appium Server に再接続しています…';
     case 'checkEnvironment': return 'Appium の導入状況を確認しています…';
     case 'installOfficial': return '公式 Inspector プラグインをインストールしています…';
     case 'startOfficial': return '公式 Inspector を起動しています…';
@@ -257,6 +280,7 @@ async function startServer(rawServerUrl: string): Promise<void> {
   output.appendLine(`Appium Server を起動します: appium ${args.join(' ')}`);
   const child = spawn('appium', args, { shell: false });
   serverProcess = child;
+  managedServerUrl = serverKey(serverUrl);
   child.stdout.on('data', (data: Buffer) => output.append(data.toString()));
   child.stderr.on('data', (data: Buffer) => output.append(data.toString()));
   child.on('error', (error: NodeJS.ErrnoException) => {
@@ -357,10 +381,11 @@ function post(message: unknown): void {
 }
 
 function postServerState(): void {
-  post({ type: 'server', running: Boolean(serverProcess) });
+  post({ type: 'server', running: Boolean(serverProcess), url: managedServerUrl });
 }
 
 export async function deactivate(): Promise<void> {
+  connectionMonitor?.dispose();
   clipboardRelay?.close();
   serverProcess?.kill('SIGTERM');
   await settingsWrites;
