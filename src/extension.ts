@@ -1,38 +1,28 @@
 import * as vscode from 'vscode';
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { inspectorUrl, officialHtml, launcherHtml } from './official';
+import { startInspectorProxy } from './inspector-proxy';
+import { readFile } from 'node:fs/promises';
 
-const W3C_ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
-
-type AppiumResponse<T> = { value?: T; sessionId?: string; status?: number };
-
-interface SessionState {
-  id: string;
-  serverUrl: string;
-}
-
-interface WindowRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface SourceElement {
-  tag: string;
-  attributes: Record<string, string>;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-let inspectorWebview: vscode.Webview | undefined;
-let session: SessionState | undefined;
 let output: vscode.OutputChannel;
 let serverProcess: ChildProcessWithoutNullStreams | undefined;
-let latestSource = '';
+const views = new Set<vscode.Webview>();
+let busy = false;
+let officialPanel: vscode.WebviewPanel | undefined;
+let officialServer = 'http://127.0.0.1:4723';
+let extensionUri: vscode.Uri;
+let clipboardRelay: Awaited<ReturnType<typeof startInspectorProxy>> | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  extensionUri = context.extensionUri;
+  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.paste', async () => {
+    if (officialPanel?.active && clipboardRelay) {
+      await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
+    }
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.copy', async () => {
+    if (officialPanel?.active && clipboardRelay) await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'copy' });
+  }));
   output = vscode.window.createOutputChannel('Appium Inspector Lite');
   context.subscriptions.push(output);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider(
@@ -41,6 +31,7 @@ export function activate(context: vscode.ExtensionContext): void {
     { webviewOptions: { retainContextWhenHidden: true } }
   ));
   context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.open', openInspector));
+  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.workspace', () => handleMessage({ type: 'openOfficial', serverUrl: officialServer })));
 }
 
 class InspectorSidebarProvider implements vscode.WebviewViewProvider {
@@ -48,14 +39,14 @@ class InspectorSidebarProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     const webview = webviewView.webview;
-    inspectorWebview = webview;
+    views.add(webview);
     webview.options = { enableScripts: true };
-    webview.html = getWebviewHtml(webview, this.extensionUri);
+    webview.html = launcherHtml(
+      webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'launcher.js')).toString(),
+      webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'launcher.css')).toString(), webview.cspSource);
     webview.onDidReceiveMessage((message: WebviewMessage) => handleMessage(message));
     webviewView.onDidDispose(() => {
-      if (inspectorWebview === webview) {
-        inspectorWebview = undefined;
-      }
+      views.delete(webview);
     });
   }
 }
@@ -65,38 +56,37 @@ async function openInspector(): Promise<void> {
 }
 
 type WebviewMessage =
-  | { type: 'ready' }
-  | { type: 'startSession'; serverUrl: string; capabilities: string }
-  | { type: 'startServer'; serverUrl: string }
-  | { type: 'stopServer' }
-  | { type: 'showOutput' }
-  | { type: 'refresh' }
-  | { type: 'findElement'; using: string; value: string }
-  | { type: 'selectScreenshotElement'; x: number; y: number; screenshotWidth: number; screenshotHeight: number }
-  | { type: 'clickElement'; elementId: string }
-  | { type: 'sendKeys'; elementId: string; text: string }
-  | { type: 'copy'; text: string }
-  | { type: 'quitSession' };
+  | { type: 'startOfficial' | 'openOfficial'; serverUrl: string }
+  | { type: 'installOfficial' | 'ready' | 'stopServer' | 'showOutput' };
 
 async function handleMessage(message: WebviewMessage): Promise<void> {
-  const loadingLabel = getLoadingLabel(message);
+  if (message.type === 'ready') {
+    postServerState();
+    post({ type: 'loading', active: busy });
+    return;
+  }
+  if (busy) { return; }
+  busy = true;
+  const loadingLabel = getLoadingLabel(message) ?? '処理しています…';
   if (loadingLabel) {
     post({ type: 'loading', active: true, label: loadingLabel });
   }
   try {
     switch (message.type) {
-      case 'ready':
-        postServerState();
-        if (session) {
-          post({ type: 'session', id: session.id });
+      case 'installOfficial':
+        if (serverProcess) { throw new Error('プラグインのインストール前に Server を停止してください。'); }
+        await installOfficialPlugin();
+        post({ type: 'notice', level: 'success', text: '公式プラグインをインストールしました。「起動して公式 Inspector を開く」を押してください。' });
+        break;
+      case 'startOfficial':
+        inspectorUrl(message.serverUrl);
+        if (!(await isServerReachable(normaliseServerUrl(message.serverUrl)))) {
+          await startServer(message.serverUrl);
         }
+        await openOfficial(message.serverUrl);
         break;
-      case 'startSession':
-        await startSession(message.serverUrl, message.capabilities);
-        await refreshInspector();
-        break;
-      case 'startServer':
-        await startServer(message.serverUrl);
+      case 'openOfficial':
+        await openOfficial(message.serverUrl);
         break;
       case 'stopServer':
         await stopServer();
@@ -104,38 +94,13 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
       case 'showOutput':
         output.show(true);
         break;
-      case 'refresh':
-        await refreshInspector();
-        break;
-      case 'findElement':
-        await findElement(message.using, message.value);
-        break;
-      case 'selectScreenshotElement':
-        await selectScreenshotElement(message.x, message.y, message.screenshotWidth, message.screenshotHeight);
-        break;
-      case 'clickElement':
-        await command(`/element/${encodeURIComponent(message.elementId)}/click`, 'POST', {});
-        post({ type: 'notice', level: 'success', text: '要素をタップしました。' });
-        await refreshInspector();
-        break;
-      case 'sendKeys':
-        await command(`/element/${encodeURIComponent(message.elementId)}/value`, 'POST', { text: message.text, value: [...message.text] });
-        post({ type: 'notice', level: 'success', text: 'テキストを入力しました。' });
-        await refreshInspector();
-        break;
-      case 'copy':
-        await vscode.env.clipboard.writeText(message.text);
-        post({ type: 'notice', level: 'success', text: 'クリップボードにコピーしました。' });
-        break;
-      case 'quitSession':
-        await quitSession();
-        break;
     }
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
     output.appendLine(text);
     post({ type: 'notice', level: 'error', text });
   } finally {
+    busy = false;
     if (loadingLabel) {
       post({ type: 'loading', active: false });
     }
@@ -144,12 +109,63 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
 
 function getLoadingLabel(message: WebviewMessage): string | undefined {
   switch (message.type) {
-    case 'startServer': return 'Appium Server を起動しています…';
+    case 'installOfficial': return '公式 Inspector プラグインをインストールしています…';
+    case 'startOfficial': return '公式 Inspector を起動しています…';
+    case 'openOfficial': return '公式 Inspector の接続を確認しています…';
     case 'stopServer': return 'Appium Server を停止しています…';
-    case 'startSession': return 'セッションを開始しています…';
-    case 'quitSession': return 'セッションを終了しています…';
     default: return undefined;
   }
+}
+
+async function openOfficial(rawUrl: string): Promise<void> {
+  const url = inspectorUrl(rawUrl);
+  let response: Response;
+  try { response = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: 'error' }); }
+  catch { throw new Error('Appium に接続できません。「起動して公式 Inspector を開く」を押すか、Server URL を確認してください。'); }
+  if (!response.ok || !(await response.text()).includes('Appium Inspector')) {
+    throw new Error('公式 Inspector が有効になっていません。初回セットアップでプラグインを導入し、Server を --use-plugins=inspector 付きで再起動してください。外部で起動した Server はそのターミナルで停止してください。');
+  }
+  officialServer = rawUrl;
+  if (officialPanel) {
+    officialPanel.reveal();
+    // Preserve the live iframe/session when the same server is opened again.
+    if (officialPanel.title === `Appium Inspector · ${url.host}`) { return; }
+    throw new Error('別サーバーを開く場合は、現在の公式 Inspector タブを閉じてから開いてください。');
+  }
+  const adapter = await readFile(vscode.Uri.joinPath(extensionUri, 'media', 'clipboard-frame.js').fsPath, 'utf8');
+  const relay = await startInspectorProxy(url, adapter);
+  clipboardRelay = relay;
+  const panel = vscode.window.createWebviewPanel('appiumInspector.official', `Appium Inspector · ${url.host}`, vscode.ViewColumn.One,
+    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
+  officialPanel = panel;
+  panel.webview.onDidReceiveMessage(async message => {
+    if (!panel.active || message?.bridge !== relay.token) return;
+    try {
+      if (message.type === 'paste') await panel.webview.postMessage({ bridge: relay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
+      if (message.type === 'copyText' && typeof message.text === 'string') {
+        await vscode.env.clipboard.writeText(message.text);
+        await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id });
+      }
+      if (message.type === 'error' && typeof message.text === 'string') void vscode.window.showWarningMessage(message.text);
+    } catch {
+      if (message.type === 'copyText') await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id, error: 'クリップボードへコピーできませんでした。' });
+      void vscode.window.showErrorMessage('クリップボードを操作できませんでした。');
+    }
+  });
+  panel.webview.html = officialHtml(relay.url, relay.token);
+  panel.onDidDispose(() => { relay.close(); clipboardRelay = undefined; officialPanel = undefined; });
+}
+
+async function installOfficialPlugin(): Promise<void> {
+  if (!vscode.workspace.isTrusted) { throw new Error('このワークスペースを信頼してから実行してください。'); }
+  output.show(true);
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('appium', ['plugin', 'install', 'inspector'], { shell: false });
+    child.stdout.on('data', (data: Buffer) => output.append(data.toString()));
+    child.stderr.on('data', (data: Buffer) => output.append(data.toString()));
+    child.once('error', (error) => reject(new Error(`Appium を実行できません: ${error.message}`)));
+    child.once('close', code => code === 0 ? resolve() : reject(new Error('プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。')));
+  });
 }
 
 async function startServer(rawServerUrl: string): Promise<void> {
@@ -171,6 +187,7 @@ async function startServer(rawServerUrl: string): Promise<void> {
   const address = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname.replace(/^\[|\]$/g, '');
   const basePath = url.pathname.replace(/\/$/, '');
   const args = ['--address', address, '--port', port];
+  args.push('--use-plugins=inspector');
   if (basePath && basePath !== '/') {
     args.push('--base-path', basePath);
   }
@@ -239,7 +256,7 @@ function waitForProcessExit(child: ChildProcessWithoutNullStreams): Promise<void
 
 async function isServerReachable(serverUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(`${serverUrl}/status`);
+    const response = await fetch(`${serverUrl}/status`, { signal: AbortSignal.timeout(2000) });
     return response.ok;
   } catch {
     return false;
@@ -260,206 +277,6 @@ async function waitForServer(serverUrl: string, child: ChildProcessWithoutNullSt
   throw new Error('Appium Server の起動がタイムアウトしました。出力パネルの Appium Inspector Lite ログを確認してください。');
 }
 
-async function startSession(rawServerUrl: string, rawCapabilities: string): Promise<void> {
-  const serverUrl = normaliseServerUrl(rawServerUrl);
-  let capabilities: Record<string, unknown>;
-  try {
-    capabilities = JSON.parse(rawCapabilities) as Record<string, unknown>;
-  } catch {
-    throw new Error('Capabilities は有効な JSON オブジェクトで指定してください。');
-  }
-  if (Array.isArray(capabilities) || capabilities === null) {
-    throw new Error('Capabilities は JSON オブジェクトで指定してください。');
-  }
-
-  const response = await request<AppiumResponse<{ sessionId?: string; capabilities?: unknown }>>(
-    `${serverUrl}/session`,
-    'POST',
-    { capabilities: { alwaysMatch: capabilities, firstMatch: [{}] } }
-  );
-  const sessionId = response.value?.sessionId ?? response.sessionId;
-  if (!sessionId) {
-    throw new Error('Appium から sessionId が返されませんでした。Capabilities とサーバー設定を確認してください。');
-  }
-  session = { id: sessionId, serverUrl };
-  post({ type: 'session', id: sessionId });
-  post({ type: 'notice', level: 'success', text: `セッションを開始しました: ${sessionId}` });
-}
-
-async function refreshInspector(): Promise<void> {
-  ensureSession();
-  const [screenshot, source] = await Promise.all([
-    command<string>('/screenshot', 'GET'),
-    command<string>('/source', 'GET')
-  ]);
-  latestSource = source;
-  post({ type: 'snapshot', screenshot, source });
-}
-
-async function findElement(using: string, value: string): Promise<void> {
-  if (!value.trim()) {
-    throw new Error('検索する locator の値を入力してください。');
-  }
-  const result = await command<Record<string, string>>('/element', 'POST', { using, value });
-  const elementId = result[W3C_ELEMENT_KEY] ?? result.ELEMENT;
-  if (!elementId) {
-    throw new Error('要素 ID を取得できませんでした。');
-  }
-  post({ type: 'element', id: elementId, using, value });
-  post({ type: 'notice', level: 'success', text: '要素を見つけました。操作または locator のコピーができます。' });
-}
-
-async function selectScreenshotElement(rawX: number, rawY: number, screenshotWidth: number, screenshotHeight: number): Promise<void> {
-  if (!latestSource) {
-    throw new Error('Page Source が未取得です。画面を更新してから、スクリーンショット上の要素を選択してください。');
-  }
-  if (screenshotWidth <= 0 || screenshotHeight <= 0) {
-    throw new Error('スクリーンショットのサイズを取得できませんでした。画面を更新してください。');
-  }
-
-  const rect = await command<WindowRect>('/window/rect', 'GET');
-  const x = Math.round(rect.x + (rawX / screenshotWidth) * rect.width);
-  const y = Math.round(rect.y + (rawY / screenshotHeight) * rect.height);
-  const candidates = parseSourceElements(latestSource)
-    .filter((element) => x >= element.x && x <= element.x + element.width && y >= element.y && y <= element.y + element.height)
-    .sort((a, b) => (a.width * a.height) - (b.width * b.height));
-  const selected = candidates[0];
-  if (!selected) {
-    throw new Error('クリック位置に対応する要素を Page Source から見つけられませんでした。Canvas や画像のみで構成された領域では要素を取得できません。');
-  }
-
-  for (const locator of getLocators(selected)) {
-    try {
-      const result = await command<Record<string, string>>('/element', 'POST', locator);
-      const elementId = result[W3C_ELEMENT_KEY] ?? result.ELEMENT;
-      if (elementId) {
-        post({ type: 'element', id: elementId, using: locator.using, value: locator.value, tag: selected.tag });
-        post({ type: 'notice', level: 'success', text: `${selected.tag} を選択しました（${locator.using}）。` });
-        return;
-      }
-    } catch {
-      // 属性の候補を順に試す。次の locator で見つかることがある。
-    }
-  }
-  throw new Error('画面上の要素は特定できましたが、再取得できる locator を生成できませんでした。Page Source の属性を確認してください。');
-}
-
-function parseSourceElements(source: string): SourceElement[] {
-  const elements: SourceElement[] = [];
-  const tags = /<([A-Za-z0-9_.:-]+)\b([^>]*)\/?\s*>/g;
-  for (const match of source.matchAll(tags)) {
-    const attributes: Record<string, string> = {};
-    for (const attribute of match[2].matchAll(/([A-Za-z_:][-A-Za-z0-9_:.]*)="([^"]*)"/g)) {
-      attributes[attribute[1]] = decodeXml(attribute[2]);
-    }
-    const box = getElementBox(attributes);
-    if (box && box.width > 0 && box.height > 0) {
-      elements.push({ tag: match[1], attributes, ...box });
-    }
-  }
-  return elements;
-}
-
-function getElementBox(attributes: Record<string, string>): Omit<SourceElement, 'tag' | 'attributes'> | undefined {
-  const androidBounds = attributes.bounds?.match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/);
-  if (androidBounds) {
-    const [, left, top, right, bottom] = androidBounds.map(Number);
-    return { x: left, y: top, width: right - left, height: bottom - top };
-  }
-  const x = Number(attributes.x);
-  const y = Number(attributes.y);
-  const width = Number(attributes.width);
-  const height = Number(attributes.height);
-  if ([x, y, width, height].every(Number.isFinite)) {
-    return { x, y, width, height };
-  }
-  return undefined;
-}
-
-function getLocators(element: SourceElement): Array<{ using: string; value: string }> {
-  const { attributes } = element;
-  const locators: Array<{ using: string; value: string }> = [];
-  const add = (using: string, value: string | undefined): void => {
-    if (value && !locators.some((locator) => locator.using === using && locator.value === value)) {
-      locators.push({ using, value });
-    }
-  };
-  add('accessibility id', attributes['content-desc']);
-  add('id', attributes['resource-id']);
-  add('accessibility id', attributes.name);
-  add('accessibility id', attributes.label);
-  if (attributes.text) {
-    add('xpath', `//*[@text=${xpathLiteral(attributes.text)}]`);
-  }
-  if (attributes.bounds) {
-    add('xpath', `//*[@bounds=${xpathLiteral(attributes.bounds)}]`);
-  } else if (attributes.x && attributes.y && attributes.width && attributes.height) {
-    add('xpath', `//*[@x=${xpathLiteral(attributes.x)} and @y=${xpathLiteral(attributes.y)} and @width=${xpathLiteral(attributes.width)} and @height=${xpathLiteral(attributes.height)}]`);
-  }
-  return locators;
-}
-
-function decodeXml(value: string): string {
-  return value.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-}
-
-function xpathLiteral(value: string): string {
-  if (!value.includes("'")) {
-    return `'${value}'`;
-  }
-  if (!value.includes('"')) {
-    return `"${value}"`;
-  }
-  return `concat(${value.split("'").map((part) => `'${part}'`).join(', "\'", ')})`;
-}
-
-async function quitSession(): Promise<void> {
-  if (!session) {
-    return;
-  }
-  await request(`${session.serverUrl}/session/${encodeURIComponent(session.id)}`, 'DELETE');
-  session = undefined;
-  latestSource = '';
-  post({ type: 'session', id: null });
-  post({ type: 'snapshot', screenshot: null, source: '' });
-  post({ type: 'notice', level: 'success', text: 'セッションを終了しました。' });
-}
-
-async function command<T>(path: string, method: string, body?: unknown): Promise<T> {
-  const current = ensureSession();
-  const response = await request<AppiumResponse<T>>(
-    `${current.serverUrl}/session/${encodeURIComponent(current.id)}${path}`,
-    method,
-    body
-  );
-  return response.value as T;
-}
-
-async function request<T>(url: string, method: string, body?: unknown): Promise<T> {
-  output.appendLine(`${method} ${url}`);
-  const response = await fetch(url, {
-    method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
-  const raw = await response.text();
-  let parsed: unknown;
-  try { parsed = raw ? JSON.parse(raw) : {}; } catch { parsed = { value: raw }; }
-  if (!response.ok) {
-    const value = (parsed as { value?: { message?: string } | string }).value;
-    const detail = typeof value === 'object' && value !== null ? value.message : value;
-    throw new Error(`Appium request failed (${response.status}): ${detail ?? raw}`);
-  }
-  return parsed as T;
-}
-
-function ensureSession(): SessionState {
-  if (!session) {
-    throw new Error('先に Appium セッションを開始してください。');
-  }
-  return session;
-}
-
 function normaliseServerUrl(value: string): string {
   const url = value.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(url)) {
@@ -469,80 +286,14 @@ function normaliseServerUrl(value: string): string {
 }
 
 function post(message: unknown): void {
-  void inspectorWebview?.postMessage(message);
+  for (const view of views) { void view.postMessage(message); }
 }
 
 function postServerState(): void {
   post({ type: 'server', running: Boolean(serverProcess) });
 }
 
-function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-  const script = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
-  const style = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'styles.css'));
-  const nonce = crypto.randomUUID();
-  return `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; img-src ${webview.cspSource} data:; script-src 'nonce-${nonce}';">
-  <link href="${style}" rel="stylesheet">
-  <title>Appium Inspector Lite</title>
-</head>
-<body>
-  <main class="app-shell">
-    <div id="loading" class="loading-overlay" role="status" aria-live="polite" hidden><div class="loading-card"><span class="spinner" aria-hidden="true"></span><span id="loading-label">処理しています…</span></div></div>
-    <header class="app-header"><div><h1>Appium Inspector</h1><span class="app-subtitle">Mobile UI inspector</span></div><span id="session-state" class="status-pill">未接続</span></header>
-    <nav class="tab-list" role="tablist" aria-label="Inspector の表示切替">
-      <button class="tab-trigger active" role="tab" aria-selected="true" data-tab="connection">接続</button>
-      <button class="tab-trigger" role="tab" aria-selected="false" data-tab="screen">画面</button>
-      <button class="tab-trigger" role="tab" aria-selected="false" data-tab="elements">要素</button>
-      <button class="tab-trigger" role="tab" aria-selected="false" data-tab="source">XML</button>
-    </nav>
-    <section id="tab-connection" class="tab-panel scroll-panel active" role="tabpanel">
-      <div class="card connection-card">
-        <div class="section-heading"><h2>Appium Server</h2><span id="server-state" class="muted-status">停止中</span></div>
-        <label>Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label>
-        <div class="actions action-grid"><button id="start-server">Server 起動</button><button id="stop-server" class="secondary" disabled>停止</button><button id="show-log" class="secondary">ログ</button></div>
-      </div>
-      <div class="card">
-        <div class="section-heading"><h2>セッション</h2><span class="muted-status">W3C</span></div>
-        <div class="actions action-grid"><button id="start">セッション開始</button><button id="quit" class="secondary">終了</button></div>
-        <details class="capabilities"><summary>Capabilities を編集</summary><label>Capabilities (JSON)<textarea id="capabilities" spellcheck="false">{
-  "platformName": "Android",
-  "appium:automationName": "UiAutomator2",
-  "appium:deviceName": "Android Emulator"
-}</textarea></label></details>
-      </div>
-    </section>
-    <section id="tab-screen" class="tab-panel screen-panel" role="tabpanel">
-      <div class="screen-toolbar"><div><strong>端末画面</strong><span>クリックして要素を選択</span></div><button id="refresh" class="secondary">更新</button></div>
-      <div class="screenshot-stage"><div id="screenshot-empty">セッションを開始すると、端末画面が表示されます。</div><img id="screenshot" alt="Appium screenshot"></div>
-      <p id="screenshot-hint">要素を選ぶと、要素タブに locator と操作を表示します。</p>
-    </section>
-    <section id="tab-elements" class="tab-panel scroll-panel" role="tabpanel">
-      <div class="card">
-        <h2>要素を検索</h2>
-        <label>Locator 戦略<select id="using"><option value="accessibility id">accessibility id</option><option value="id">id</option><option value="xpath">xpath</option><option value="class name">class name</option><option value="-android uiautomator">Android UIAutomator</option><option value="-ios predicate string">iOS predicate</option></select></label>
-        <div class="find-row"><input id="locator" placeholder="例: login_button"><button id="find">検索</button></div>
-      </div>
-      <div id="element-result" class="card selected-element" hidden>
-        <div class="section-heading"><h2>選択中の要素</h2><button id="copy-locator" class="secondary">コピー</button></div>
-        <code id="element-id"></code>
-        <button id="tap" class="full-width">タップ</button>
-        <label>テキスト入力<input id="text-to-send" placeholder="入力する文字列"></label>
-        <button id="send-keys" class="secondary full-width">テキストを入力</button>
-      </div>
-    </section>
-    <section id="tab-source" class="tab-panel source-panel" role="tabpanel"><div class="source-toolbar"><strong>Page Source</strong><button id="copy-source" class="secondary">XMLをコピー</button></div><pre id="source">まだ取得していません。</pre></section>
-    <p id="notice" role="status" aria-live="polite"></p>
-  </main>
-  <script nonce="${nonce}" src="${script}"></script>
-</body>
-</html>`;
-}
-
 export function deactivate(): void {
-  void quitSession().catch(() => undefined);
+  clipboardRelay?.close();
   serverProcess?.kill('SIGTERM');
 }

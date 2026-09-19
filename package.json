@@ -2,7 +2,7 @@
   "name": "appium-inspector-lite",
   "displayName": "Appium Inspector Lite",
   "description": "Inspect and interact with Appium sessions without leaving VS Code.",
-  "version": "0.1.0",
+  "version": "0.3.3",
   "publisher": "noritaka1166",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,7 @@
     "onView:appiumInspector.sidebar"
   ],
   "main": "./out/extension.js",
+  "extensionKind": ["ui"],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -44,12 +45,20 @@
       ]
     },
     "commands": [
+      { "command": "appiumInspector.paste", "title": "Appium Inspector: Paste" },
+      { "command": "appiumInspector.copy", "title": "Appium Inspector: Copy" },
+      {
+        "command": "appiumInspector.workspace",
+        "title": "Appium Inspector: Open Workspace"
+      },
       {
         "command": "appiumInspector.open",
         "title": "Appium Inspector: Open"
       }
     ],
     "keybindings": [
+      { "command": "appiumInspector.paste", "key": "ctrl+v", "mac": "cmd+v", "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'" },
+      { "command": "appiumInspector.copy", "key": "ctrl+c", "mac": "cmd+c", "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'" },
       {
         "command": "appiumInspector.open",
         "key": "ctrl+alt+a",
@@ -59,6 +68,7 @@
     ]
   },
   "scripts": {
+    "test": "npm run compile && node --test tests/*.test.cjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",

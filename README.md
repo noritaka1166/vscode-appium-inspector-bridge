@@ -1,40 +1,39 @@
 # Appium Inspector Lite
 
-VS Code 内で Appium セッションを開始し、端末画面の確認、Page Source の閲覧、要素操作を行うための MVP 拡張です。
+公式 Appium Inspector プラグインの Web UI を、VS Code のエディタータブ内で使う非公式の拡張です。v0.3.3から独自の簡易UIを廃止し、公式UIに一本化しています。
 
-## できること
+## 公式 Inspector の使い方
 
-- Appium Server への接続と W3C セッションの開始・終了
-- 端末スクリーンショットと XML Page Source の取得
-- スクリーンショット上のクリック位置から、対応するネイティブ要素を選択
-- `accessibility id`、`id`、`xpath`、Android UIAutomator、iOS predicate による要素検索
-- 検索した要素のタップ・テキスト入力・locator コピー
+1. ローカルに Appium 3 と対象ドライバーを用意します。
+2. Activity Bar の Appium Inspector を開きます。
+3. 初回は「初回セットアップ」→「公式プラグインをインストール」を押します（`appium plugin install inspector` を現在の Appium 環境で実行）。
+4. 「起動して公式 Inspector を開く」を押します。サーバーを `--use-plugins=inspector` 付きで起動し、`/inspector` をエディター領域に表示します。
+5. Capabilities、セッション開始／終了、Source、Commands、Gestures、Recorderは公式UIで操作します。
 
-## 使い方
+既存サーバーにも「起動済みの Inspector を開く」で接続できます。プラグイン無しで起動済みの場合は、停止してからプラグイン有効で再起動してください。`/wd/hub` 等のbase pathがあってもUIは `/inspector` にあります。公式画面側のServer Detailsには実際のAppium base pathを設定してください。
 
-1. Appium Server と対象端末（エミュレータまたは実機）を起動します。
-2. VS Code の Activity Bar にある **Appium Inspector** アイコンを選択します。コマンドパレットの `Appium Inspector: Open` または `⌘⌥A`（Windows / Linux: `Ctrl+Alt+A`）でもサイドバーを開けます。
-3. Server URL と Capabilities を入力して **セッション開始** を選びます。
+VS CodeデスクトップのローカルHTTP接続（localhost / 127.0.0.1 / ::1）を対象としています。Remote SSH / コンテナ内への自動転送、vscode.devは対象外です。Appiumを実行できるPATHでVS Codeを起動してください。Windowsのnpm `.cmd` ランチャーによる起動は未対応で、外部でサーバーを起動して接続してください。
 
-ローカルに `appium` コマンドをインストール済みであれば、Inspector の **Server 起動** からも起動できます。`localhost` / `127.0.0.1` のみ対応し、サーバーログは **ログを表示** で確認できます。
+公式UIのセッションは公式UIで管理されます。タブを閉じるだけではセッションは終了しません。Server停止・VS Code終了の前に公式UIのセッション終了操作を行ってください。
 
-標準的な Android の例:
+Inspector本体はVSIXに同梱せず、インストールした公式プラグインから配信します。表示機能はプラグインのバージョンに従います。ブラウザー版のためElectron専用のメニュー・OS連携は含まれず、クリップボードやダウンロードの可否はWebviewの制約を受けます。
 
-```json
-{
-  "platformName": "Android",
-  "appium:automationName": "UiAutomator2",
-  "appium:deviceName": "Android Emulator",
-  "appium:appPackage": "com.example.app",
-  "appium:appActivity": ".MainActivity"
-}
-```
+参照: [公式プラグイン](https://github.com/appium/appium-inspector/tree/main/plugins) / [導入手順](https://appium.github.io/appium-inspector/latest/quickstart/installation/)。本拡張はAppiumチームの公式製品ではありません。公式プラグインはApache-2.0、本拡張のコードはMITです。
 
-## 開発
+## macOS のコピー・貼り付け
+
+v0.3.2ではSelected Elementの属性・locator行など、公式UIが `navigator.clipboard.writeText()` で行うコピーもVS Code経由に変更しました。クリップボードへの書き込みが完了してから公式UIへ完了を返します。
+
+v0.3.1でVS Code内のiframeに対するクリップボード仲介を追加しました。JSONの鉛筆アイコンを押し、入力欄をクリックしてから `⌘V` を使えます。ショートカットが他の拡張に奪われる場合は、タブ上部の「全選択」「貼り付け」を使ってください。「コピー」ボタンも使用できます。
+
+公式プラグインのファイルは変更せず、一時的なローカル中継を経由して表示します。公式画面のRemote Portには中継ポートが自動設定されます。タブを閉じると中継が停止するため、先にセッションを終了してください。中継のポートは起動ごとに変わるため、公式UI内の保存設定は再表示時に引き継がれない場合があります。
+
+## 開発・検証
 
 ```bash
 npm install
 npm run compile
+npm test
 ```
 
 VS Code でこのフォルダを開き、`F5` で **Appium Inspector Lite をデバッグ起動** を選ぶと、ビルド後に Extension Development Host が起動します。
