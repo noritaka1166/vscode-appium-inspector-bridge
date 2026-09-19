@@ -11,7 +11,31 @@ $('install').onclick = () => send('installOfficial');
 $('stop').onclick = () => send('stopServer');
 $('logs').onclick = () => send('showOutput');
 $('check-environment').onclick = () => send('checkEnvironment');
+$('list-devices').onclick = () => send('listDevices');
+$('device-select').onchange = () => {
+  $('device-caps').value = '';
+  $('copy-caps').disabled = true;
+  if ($('device-select').value) vscode.postMessage({ type: 'deviceCapabilities', deviceId: $('device-select').value });
+};
+$('copy-caps').onclick = () => vscode.postMessage({ type: 'copyCapabilities', deviceId: $('device-select').value });
 window.addEventListener('message', ({ data }) => {
+  if (data.type === 'devices') {
+    const select = $('device-select');
+    select.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = ''; placeholder.textContent = data.report.devices.length ? '端末を選択してください' : '選択できる端末がありません';
+    select.append(placeholder);
+    for (const device of data.report.devices) {
+      const option = document.createElement('option');
+      option.value = device.id;
+      option.textContent = `${device.platform} · ${device.name} · ${device.state} · ${device.udid}`;
+      select.append(option);
+    }
+    select.disabled = !data.report.devices.length;
+    $('device-caps').value = ''; $('copy-caps').disabled = true;
+    $('device-notes').textContent = data.report.notes.join('\n');
+  }
+  if (data.type === 'capabilitiesTemplate') { $('device-caps').value = data.text; $('copy-caps').disabled = false; }
   if (data.type === 'connection') {
     const status = { checking: '確認中', connected: '接続中', disconnected: '切断', invalid: 'URLを確認してください（ローカルHTTPのみ対応）' };
     const owner = { managed: '拡張管理', external: '外部起動', unknown: '起動元未確認' };

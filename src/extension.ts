@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { settingKeys, validateSettings } from './settings';
 import { checkEnvironment, EnvironmentReport } from './environment';
 import { ConnectionMonitor, probeServer, serverKey } from './connection';
+import { listDevices, capabilitiesFor, DeviceReport } from './devices';
 
 let output: vscode.OutputChannel;
 let serverProcess: ChildProcessWithoutNullStreams | undefined;
@@ -20,6 +21,7 @@ let settingsWrites: Promise<void> = Promise.resolve();
 let environmentReport: EnvironmentReport | undefined;
 let connectionMonitor: ConnectionMonitor;
 let managedServerUrl: string | undefined;
+let deviceReport: DeviceReport | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
@@ -69,6 +71,8 @@ async function openInspector(): Promise<void> {
 }
 
 type WebviewMessage =
+  | { type: 'deviceCapabilities' | 'copyCapabilities'; deviceId: string }
+  | { type: 'listDevices' }
   | { type: 'startOfficial' | 'openOfficial' | 'watchServer' | 'reconnect'; serverUrl: string }
   | { type: 'installOfficial' | 'checkEnvironment' | 'ready' | 'stopServer' | 'showOutput' };
 
@@ -81,6 +85,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
   if (message.type === 'ready') {
     postServerState();
     if (environmentReport) post({ type: 'environment', report: environmentReport });
+    if (deviceReport) post({ type: 'devices', report: deviceReport });
     post({ type: 'loading', active: busy });
     return;
   }
@@ -92,6 +97,23 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
   }
   try {
     switch (message.type) {
+      case 'listDevices':
+        if (!vscode.workspace.isTrusted) throw new Error('端末一覧の取得には adb / xcrun を実行します。ワークスペースを信頼してから実行してください。');
+        deviceReport = await listDevices();
+        post({ type: 'devices', report: deviceReport });
+        break;
+      case 'deviceCapabilities':
+      case 'copyCapabilities': {
+        const device = deviceReport?.devices.find(item => item.id === message.deviceId);
+        if (!device) throw new Error('端末一覧を更新し、端末を選択してください。');
+        const text = capabilitiesFor(device);
+        post({ type: 'capabilitiesTemplate', text });
+        if (message.type === 'copyCapabilities') {
+          await vscode.env.clipboard.writeText(text);
+          post({ type: 'notice', level: 'success', text: 'Capabilities をコピーしました。公式InspectorのJSON編集欄に貼り付けてください。' });
+        }
+        break;
+      }
       case 'reconnect': {
         const url = serverKey(message.serverUrl);
         connectionMonitor.watch(url);
@@ -145,6 +167,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
 
 function getLoadingLabel(message: WebviewMessage): string | undefined {
   switch (message.type) {
+    case 'listDevices': return 'Android端末・iOSシミュレーターを確認しています…';
     case 'reconnect': return 'Appium Server に再接続しています…';
     case 'checkEnvironment': return 'Appium の導入状況を確認しています…';
     case 'installOfficial': return '公式 Inspector プラグインをインストールしています…';

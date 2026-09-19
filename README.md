@@ -28,6 +28,17 @@ v0.3.1でVS Code内のiframeに対するクリップボード仲介を追加し�
 
 公式プラグインのファイルは変更せず、一時的なローカル中継を経由して表示します。公式画面のRemote Portには中継ポートが自動設定されます。タブを閉じると中継が停止するため、先にセッションを終了してください。
 
+## 端末一覧・Capabilitiesのひな形
+
+サイドバーの「端末・Capabilities」→「端末一覧を更新」で、ローカルのAndroid実機・エミュレーターとiOSシミュレーターを表示します。端末を選ぶと `platformName`・`appium:automationName`・`appium:udid`・`appium:deviceName` を含むJSONを生成します。
+
+「JSONをコピー」を押し、公式InspectorのJSON Representationの鉛筆を押して全選択・貼り付けしてください。対象アプリに応じて `appium:app`、Androidの `appium:appPackage` / `appium:appActivity`、iOSの `appium:bundleId` を追加します。保存は公式UIの「Save As」を使用してください。
+
+- Androidは `adb devices -l` を使用。SDK Platform-ToolsのPATH、または `ANDROID_HOME` / `ANDROID_SDK_ROOT` が必要です。未認証・offline・権限不足の端末は選択対象にせず、対処方法を表示します。adbデーモンが未起動の場合は、adb自身が起動することがあります。
+- iOSはmacOS上の `xcrun simctl list devices available --json` を使用。XcodeとSimulatorランタイムが必要です。停止中のシミュレーターも一覧表示しますが、一覧取得・JSON生成では起動しません。iOS実機は対象外です。
+- 信頼済みワークスペースでのみコマンドを実行します。片方の環境で取得に失敗しても、もう片方の結果は表示します。
+- 一覧は手動更新です。端末状態が変わったら更新してください。ドライバー導入、アプリのインストール、セッション開始は行いません。
+
 ## 接続状態・再接続
 
 サイドバーのServer URLに対し、約5秒間隔（応答待ち最大2秒）で `/status` を確認し、「確認中／接続中／切断」を表示します。base pathにも対応します。これはサーバーへの到達確認であり、セッションや端末の動作保証ではありません。

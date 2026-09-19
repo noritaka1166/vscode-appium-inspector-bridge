@@ -2,7 +2,7 @@
   "name": "appium-inspector-lite",
   "displayName": "Appium Inspector Lite",
   "description": "Inspect and interact with Appium sessions without leaving VS Code.",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "publisher": "noritaka1166",
   "license": "MIT",
   "repository": {

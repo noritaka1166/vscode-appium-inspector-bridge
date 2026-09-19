@@ -4,10 +4,11 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 
 function setup({ trusted = true, reachable = false, canStart = false } = {}) {
-  let provider, checks = 0, spawns = 0;
+  let provider, checks = 0, spawns = 0, scans = 0, copied;
   const events = [], requests = [];
   const report = { canStart, items: [{ name: 'Appium', status: canStart ? 'ok' : 'error', detail: 'test' }] };
   const vscode = {
+    env: { clipboard: { writeText: async text => { copied = text; } } },
     workspace: { isTrusted: trusted },
     window: {
       createOutputChannel: () => ({ appendLine() {} }),
@@ -22,6 +23,7 @@ function setup({ trusted = true, reachable = false, canStart = false } = {}) {
     fetch: async url => { requests.push(String(url)); return { ok: String(url).endsWith('/status') && reachable, text: async () => '' }; },
     require: name => {
       if (name === 'vscode') return vscode;
+      if (name === './devices') return { ...require('../out/devices'), listDevices: async () => { scans++; return { devices: [{ id: 'Android:test', udid: 'test', name: 'Pixel', platform: 'Android', state: 'device' }], notes: [] }; } };
       if (name === './environment') return { checkEnvironment: async () => { checks++; return report; } };
       if (name === 'node:child_process') return { spawn: () => { spawns++; throw Error('test: stop before real spawn'); } };
       return name.startsWith('./') ? require('../out/' + name.slice(2)) : require(name);
@@ -30,7 +32,7 @@ function setup({ trusted = true, reachable = false, canStart = false } = {}) {
   exports.activate({ extensionUri: 'extension', subscriptions: [] });
   const view = { cspSource: 'test:', asWebviewUri: x => x, postMessage: m => events.push(m), onDidReceiveMessage(cb) { this.receive = cb; } };
   provider.resolveWebviewView({ webview: view, onDidDispose() {} });
-  return { view, events, requests, checks: () => checks, spawns: () => spawns };
+  return { view, events, requests, checks: () => checks, spawns: () => spawns, scans: () => scans, copied: () => copied };
 }
 test('manual check posts results, replays them on ready, and clears loading', async () => {
   const host = setup();
@@ -61,8 +63,25 @@ test('existing server bypasses local preflight and tries Inspector endpoint', as
 test('untrusted workspace never executes diagnostic or server commands', async () => {
   const host = setup({ trusted: false });
   await host.view.receive({ type: 'checkEnvironment' });
+  await host.view.receive({ type: 'listDevices' });
+  assert.equal(host.scans(), 0);
   await host.view.receive({ type: 'startOfficial', serverUrl: 'http://127.0.0.1:4723' });
   assert.equal(host.checks(), 0);
   assert.equal(host.spawns(), 0);
   assert.ok(host.events.some(m => m.type === 'notice' && m.text.includes('信頼')));
+});
+test('device selection generates and copies only enumerated device capabilities', async () => {
+  const host = setup();
+  await host.view.receive({ type: 'listDevices' });
+  assert.equal(host.scans(), 1);
+  assert.ok(host.events.some(m => m.type === 'devices'));
+  await host.view.receive({ type: 'deviceCapabilities', deviceId: 'Android:test' });
+  const template = host.events.find(m => m.type === 'capabilitiesTemplate').text;
+  assert.equal(JSON.parse(template)['appium:udid'], 'test');
+  assert.equal(host.copied(), undefined);
+  await host.view.receive({ type: 'copyCapabilities', deviceId: 'invalid' });
+  assert.equal(host.copied(), undefined);
+  await host.view.receive({ type: 'copyCapabilities', deviceId: 'Android:test' });
+  assert.equal(host.copied(), template);
+  assert.equal(host.spawns(), 0);
 });

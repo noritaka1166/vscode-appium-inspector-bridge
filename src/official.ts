@@ -50,6 +50,14 @@ export function launcherHtml(script: string, style: string, cspSource: string): 
 <p id="connection-state" role="status" aria-live="polite">接続状態: 未確認</p>
 <button id="reconnect">再接続</button>
 <button id="check-environment">環境チェック</button>
+<details id="device-tools"><summary>端末・Capabilities</summary>
+<p>ローカル端末を選んでJSONを生成します。端末の自動起動は行いません。</p>
+<button id="list-devices">端末一覧を更新</button>
+<p id="device-notes" role="status"></p>
+<label>端末<select id="device-select" disabled><option value="">端末一覧を更新してください</option></select></label>
+<label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label>
+<button id="copy-caps" disabled>JSONをコピー</button>
+<p>公式InspectorのJSON Representationの鉛筆を押し、全選択して貼り付けてください。対象アプリに応じて appium:app、Androidの appium:appPackage / appium:appActivity、iOSの appium:bundleId を追加します。保存は公式UIのSave Asを使用してください。</p></details>
 <details id="environment" hidden><summary>環境チェック結果</summary><p>VS Code が使用するローカル Appium 環境の導入状況です。端末・SDK の動作や、起動済みサーバーの環境は検証しません。</p><div id="environment-results" role="status" aria-live="polite"></div></details>
 <details><summary>初回セットアップ</summary><p>Appium 3 と Inspector プラグインが必要です。下のボタンは現在の Appium 環境に公式プラグインをインストールします。</p><button id="install">公式プラグインをインストール</button><p>Android / iOS ドライバーは別途必要です。</p></details>
 <details><summary>使い方</summary><p>Capabilities の編集・セッションの開始／終了は、開いた公式 Inspector 内で行います。Server を停止する前にセッションを終了してください。</p></details>
