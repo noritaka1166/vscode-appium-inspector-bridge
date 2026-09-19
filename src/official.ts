@@ -46,6 +46,8 @@ export function launcherHtml(script: string, style: string, cspSource: string): 
 <button id="launch">起動して公式 Inspector を開く</button><button id="open">起動済みの Inspector を開く</button>
 <div class="row"><button id="stop">Server 停止</button><button id="logs">ログ</button></div>
 <p id="server-state">拡張管理サーバー: 停止中</p>
+<button id="check-environment">環境チェック</button>
+<details id="environment" hidden><summary>環境チェック結果</summary><p>VS Code が使用するローカル Appium 環境の導入状況です。端末・SDK の動作や、起動済みサーバーの環境は検証しません。</p><div id="environment-results" role="status" aria-live="polite"></div></details>
 <details><summary>初回セットアップ</summary><p>Appium 3 と Inspector プラグインが必要です。下のボタンは現在の Appium 環境に公式プラグインをインストールします。</p><button id="install">公式プラグインをインストール</button><p>Android / iOS ドライバーは別途必要です。</p></details>
 <details><summary>使い方</summary><p>Capabilities の編集・セッションの開始／終了は、開いた公式 Inspector 内で行います。Server を停止する前にセッションを終了してください。</p></details>
 <p id="notice" role="status"></p></main>

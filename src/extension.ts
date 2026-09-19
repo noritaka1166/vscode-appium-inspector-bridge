@@ -4,6 +4,7 @@ import { inspectorUrl, officialHtml, launcherHtml } from './official';
 import { startInspectorProxy } from './inspector-proxy';
 import { readFile } from 'node:fs/promises';
 import { settingKeys, validateSettings } from './settings';
+import { checkEnvironment, EnvironmentReport } from './environment';
 
 let output: vscode.OutputChannel;
 let serverProcess: ChildProcessWithoutNullStreams | undefined;
@@ -15,6 +16,7 @@ let extensionUri: vscode.Uri;
 let clipboardRelay: Awaited<ReturnType<typeof startInspectorProxy>> | undefined;
 let secrets: vscode.SecretStorage;
 let settingsWrites: Promise<void> = Promise.resolve();
+let environmentReport: EnvironmentReport | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
@@ -61,11 +63,12 @@ async function openInspector(): Promise<void> {
 
 type WebviewMessage =
   | { type: 'startOfficial' | 'openOfficial'; serverUrl: string }
-  | { type: 'installOfficial' | 'ready' | 'stopServer' | 'showOutput' };
+  | { type: 'installOfficial' | 'checkEnvironment' | 'ready' | 'stopServer' | 'showOutput' };
 
 async function handleMessage(message: WebviewMessage): Promise<void> {
   if (message.type === 'ready') {
     postServerState();
+    if (environmentReport) post({ type: 'environment', report: environmentReport });
     post({ type: 'loading', active: busy });
     return;
   }
@@ -77,14 +80,21 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
   }
   try {
     switch (message.type) {
+      case 'checkEnvironment':
+        await inspectEnvironment();
+        break;
       case 'installOfficial':
         if (serverProcess) { throw new Error('プラグインのインストール前に Server を停止してください。'); }
         await installOfficialPlugin();
+        await inspectEnvironment();
         post({ type: 'notice', level: 'success', text: '公式プラグインをインストールしました。「起動して公式 Inspector を開く」を押してください。' });
         break;
       case 'startOfficial':
         inspectorUrl(message.serverUrl);
         if (!(await isServerReachable(normaliseServerUrl(message.serverUrl)))) {
+          const report = await inspectEnvironment();
+          if (!report.canStart) throw new Error('起動前チェックで問題が見つかりました。環境チェック結果の対処方法を確認してください。');
+          post({ type: 'loading', active: true, label: 'Appium Server を起動しています…' });
           await startServer(message.serverUrl);
         }
         await openOfficial(message.serverUrl);
@@ -113,12 +123,22 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
 
 function getLoadingLabel(message: WebviewMessage): string | undefined {
   switch (message.type) {
+    case 'checkEnvironment': return 'Appium の導入状況を確認しています…';
     case 'installOfficial': return '公式 Inspector プラグインをインストールしています…';
     case 'startOfficial': return '公式 Inspector を起動しています…';
     case 'openOfficial': return '公式 Inspector の接続を確認しています…';
     case 'stopServer': return 'Appium Server を停止しています…';
     default: return undefined;
   }
+}
+
+async function inspectEnvironment(): Promise<EnvironmentReport> {
+  if (!vscode.workspace.isTrusted) throw new Error('環境チェックには Appium コマンドを実行します。このワークスペースを信頼してから実行してください。');
+  post({ type: 'loading', active: true, label: 'Appium・プラグイン・ドライバーを確認しています…' });
+  environmentReport = await checkEnvironment();
+  post({ type: 'environment', report: environmentReport });
+  for (const item of environmentReport.items) output.appendLine(`[環境チェック] ${item.name}: ${item.status}\n${item.detail}\n${item.action || ''}`);
+  return environmentReport;
 }
 
 async function openOfficial(rawUrl: string): Promise<void> {
