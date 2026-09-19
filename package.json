@@ -24,7 +24,9 @@
     "onView:appiumInspector.sidebar"
   ],
   "main": "./out/extension.js",
-  "extensionKind": ["ui"],
+  "extensionKind": [
+    "ui"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -45,8 +47,14 @@
       ]
     },
     "commands": [
-      { "command": "appiumInspector.paste", "title": "Appium Inspector: Paste" },
-      { "command": "appiumInspector.copy", "title": "Appium Inspector: Copy" },
+      {
+        "command": "appiumInspector.paste",
+        "title": "Appium Inspector: Paste"
+      },
+      {
+        "command": "appiumInspector.copy",
+        "title": "Appium Inspector: Copy"
+      },
       {
         "command": "appiumInspector.workspace",
         "title": "Appium Inspector: Open Workspace"
@@ -57,8 +65,18 @@
       }
     ],
     "keybindings": [
-      { "command": "appiumInspector.paste", "key": "ctrl+v", "mac": "cmd+v", "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'" },
-      { "command": "appiumInspector.copy", "key": "ctrl+c", "mac": "cmd+c", "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'" },
+      {
+        "command": "appiumInspector.paste",
+        "key": "ctrl+v",
+        "mac": "cmd+v",
+        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'"
+      },
+      {
+        "command": "appiumInspector.copy",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'"
+      },
       {
         "command": "appiumInspector.open",
         "key": "ctrl+alt+a",
@@ -77,7 +95,7 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/vscode": "^1.96.0",
-    "@vscode/vsce": "^3.2.1",
+    "@vscode/vsce": "^4.0.0",
     "typescript": "^5.7.2"
   }
 }
