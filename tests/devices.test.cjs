@@ -6,6 +6,7 @@ const {
   listDevices,
   capabilitiesFor,
 } = require('../out/devices');
+const { setLanguage } = require('../out/i18n');
 
 test('Android includes ready devices only and explains unavailable states', () => {
   const report = parseAndroid(
@@ -78,5 +79,25 @@ test('capability templates select driver and safely encode device names and ids'
     assert.equal(result['appium:udid'], 'id"\\');
     assert.equal(result['appium:deviceName'], '<name>"');
     assert.equal(Object.keys(result).length, 4);
+  }
+});
+
+test('English device messages use English separators', () => {
+  setLanguage('en');
+  try {
+    const android = parseAndroid('List of devices attached\na unauthorized\n');
+    assert.match(android.notes[0], /^a: unauthorized\. Allow USB debugging/);
+    const ios = parseSimulators(
+      JSON.stringify({
+        devices: {
+          'com.apple.CoreSimulator.SimRuntime.iOS-18-5': [
+            { name: 'iPhone', udid: 'abc', state: 'Booted', isAvailable: true },
+          ],
+        },
+      }),
+    );
+    assert.equal(ios.devices[0].state, '18.5 · Booted');
+  } finally {
+    setLanguage('ja');
   }
 });

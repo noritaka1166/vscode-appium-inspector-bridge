@@ -86,7 +86,9 @@ export function parseAndroid(output: string): DeviceReport {
           '端末の接続・起動状態を確認してください。',
           'Check the device connection and boot state.',
         );
-      notes.push(`${udid}: ${state}。${guidance}`);
+      notes.push(
+        t(`${udid}: ${state}。${guidance}`, `${udid}: ${state}. ${guidance}`),
+      );
       continue;
     }
     const model = /(?:^|\s)model:(\S+)/
@@ -156,7 +158,10 @@ function parseSimulatorEntry(
     platform: 'iOS',
     udid: entry.udid,
     name: entry.name,
-    state: `${runtime}・${simulatorState(entry.state)}`,
+    state: t(
+      `${runtime}・${simulatorState(entry.state)}`,
+      `${runtime} · ${simulatorState(entry.state)}`,
+    ),
   };
 }
 

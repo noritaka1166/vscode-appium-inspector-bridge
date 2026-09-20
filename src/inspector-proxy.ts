@@ -32,10 +32,20 @@ export async function startInspectorProxy(
     const headers = { ...req.headers, host: upstream.host };
     delete headers.origin;
     delete headers['accept-encoding'];
+    const failRelay = (): void => {
+      if (res.writableEnded) return;
+      if (!res.headersSent) {
+        res.writeHead(502);
+        res.end(unavailableMessage);
+        return;
+      }
+      res.destroy();
+    };
     const forward = request(
       new URL(target.pathname + target.search, upstream.origin),
       { method: req.method, headers },
       (incoming) => {
+        incoming.once('error', failRelay);
         const responseHeaders = { ...incoming.headers };
         delete responseHeaders['access-control-allow-origin'];
         const html =
@@ -63,14 +73,7 @@ export async function startInspectorProxy(
         }
       },
     );
-    forward.on('error', () => {
-      if (!res.headersSent) {
-        res.writeHead(502);
-        res.end(unavailableMessage);
-        return;
-      }
-      res.destroy();
-    });
+    forward.once('error', failRelay);
     forward.setTimeout(180000, () => forward.destroy());
     req.on('aborted', () => forward.destroy());
     req.pipe(forward);

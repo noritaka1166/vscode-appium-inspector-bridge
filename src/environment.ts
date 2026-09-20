@@ -24,34 +24,35 @@ function commandNotFound(): Error & { code: string } {
   return error;
 }
 
+function hasTrustedPermissions(
+  entry: { mode: number; uid: number },
+  uid: number | undefined,
+): boolean {
+  return (
+    (entry.mode & 0o022) === 0 &&
+    (uid === undefined || entry.uid === 0 || entry.uid === uid)
+  );
+}
+
 async function trustedExecutable(
   candidate: string,
   uid: number | undefined,
 ): Promise<string | undefined> {
-  let executable: string;
   try {
-    executable = await realpath(candidate);
+    const executable = await realpath(candidate);
+    const file = await stat(executable);
+    if (!file.isFile() || !hasTrustedPermissions(file, uid)) return undefined;
+    for (let directory = dirname(executable); ; ) {
+      const entry = await stat(directory);
+      if (!entry.isDirectory() || !hasTrustedPermissions(entry, uid))
+        return undefined;
+      const parent = dirname(directory);
+      if (parent === directory) return executable;
+      directory = parent;
+    }
   } catch {
+    // An unreadable candidate must not prevent checking later PATH entries.
     return undefined;
-  }
-  const file = await stat(executable);
-  if (
-    !file.isFile() ||
-    (file.mode & 0o022) !== 0 ||
-    (uid !== undefined && file.uid !== 0 && file.uid !== uid)
-  )
-    return undefined;
-  for (let directory = dirname(executable); ; ) {
-    const entry = await stat(directory);
-    if (
-      !entry.isDirectory() ||
-      (entry.mode & 0o022) !== 0 ||
-      (uid !== undefined && entry.uid !== 0 && entry.uid !== uid)
-    )
-      return undefined;
-    const parent = dirname(directory);
-    if (parent === directory) return executable;
-    directory = parent;
   }
 }
 
