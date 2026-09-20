@@ -4,7 +4,7 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { platform as nodePlatform } from 'node:process';
 import { t } from './i18n';
 
-export type RemediationAction =
+type RemediationAction =
   | 'installAppium'
   | 'installOfficial'
   | 'showDriverGuide';
@@ -63,7 +63,7 @@ async function trustedExecutable(
 }
 
 /** Resolve a verified absolute Appium executable instead of passing a bare command to PATH lookup. */
-export async function resolveTrustedCommand(
+async function resolveTrustedCommand(
   command: string,
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),

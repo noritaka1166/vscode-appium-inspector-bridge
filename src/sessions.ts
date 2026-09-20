@@ -1,7 +1,7 @@
 import { serverKey } from './connection';
 import { t } from './i18n';
 
-export interface RunningSession {
+interface RunningSession {
   id: string;
   created?: number;
   platformName?: string;
@@ -104,6 +104,6 @@ export async function listRunningSessions(
   });
   return {
     serverUrl,
-    sessions: sessions.sort((a, b) => (b.created ?? 0) - (a.created ?? 0)),
+    sessions: [...sessions].sort((a, b) => (b.created ?? 0) - (a.created ?? 0)),
   };
 }

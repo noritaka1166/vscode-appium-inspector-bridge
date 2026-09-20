@@ -756,21 +756,23 @@ async function openOfficial(
 }
 
 function postAttachResult(result: unknown): void {
-  const message =
-    result === 'attached'
-      ? t(
-          '既存セッションへ接続しています。公式 Inspector の表示を確認してください。',
-          'Attaching to the existing session. Check the official Inspector.',
-        )
-      : result === 'prepared'
-        ? t(
-            'Attach タブにセッションIDを入力しました。Attach を押して接続してください。',
-            'The session ID is entered in the Attach tab. Select Attach to connect.',
-          )
-        : t(
-            'セッションIDをクリップボードにコピーしました。公式 Inspector の Attach to Session タブへ貼り付けて Attach を押してください。',
-            'The session ID was copied to the clipboard. Paste it into Attach to Session in the official Inspector, then select Attach.',
-          );
+  let message: string;
+  if (result === 'attached') {
+    message = t(
+      '既存セッションへ接続しています。公式 Inspector の表示を確認してください。',
+      'Attaching to the existing session. Check the official Inspector.',
+    );
+  } else if (result === 'prepared') {
+    message = t(
+      'Attach タブにセッションIDを入力しました。Attach を押して接続してください。',
+      'The session ID is entered in the Attach tab. Select Attach to connect.',
+    );
+  } else {
+    message = t(
+      'セッションIDをクリップボードにコピーしました。公式 Inspector の Attach to Session タブへ貼り付けて Attach を押してください。',
+      'The session ID was copied to the clipboard. Paste it into Attach to Session in the official Inspector, then select Attach.',
+    );
+  }
   post({
     type: 'notice',
     level: result === 'manual' ? 'warning' : 'success',
