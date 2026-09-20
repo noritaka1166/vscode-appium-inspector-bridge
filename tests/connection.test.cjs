@@ -98,3 +98,22 @@ test('switching URL, invalid URL and disposal discard stale probe responses', as
   assert.equal(states.length, count);
   monitor.dispose();
 });
+
+test('disposing aborts an in-flight health check', async () => {
+  let aborted = false;
+  const monitor = new ConnectionMonitor(
+    () => {},
+    () => false,
+    (_, signal) =>
+      new Promise((resolve) => {
+        signal.addEventListener('abort', () => {
+          aborted = true;
+          resolve(false);
+        });
+      }),
+  );
+  monitor.watch('http://localhost:4723');
+  monitor.dispose();
+  await tick();
+  assert.equal(aborted, true);
+});

@@ -1,5 +1,6 @@
 const vscode = acquireVsCodeApi();
 const $ = (id) => document.getElementById(id);
+const protocol = new Set(window.appiumInspectorBridgeProtocol || []);
 const text = window.appiumInspectorBridgeText || {
   selectDevice: 'Select a device',
   noDevices: 'No selectable devices found',
@@ -25,8 +26,9 @@ $('server-url').onchange = () => {
   vscode.setState({ serverUrl: $('server-url').value });
   send('watchServer');
 };
-function send(type) {
-  vscode.postMessage({ type, serverUrl: $('server-url').value });
+function send(type, details = {}) {
+  if (!protocol.has(type)) return;
+  vscode.postMessage({ type, serverUrl: $('server-url').value, ...details });
 }
 $('launch').onclick = () => send('startOfficial');
 $('open').onclick = () => send('openOfficial');
@@ -40,16 +42,10 @@ $('device-select').onchange = () => {
   $('device-caps').value = '';
   $('copy-caps').disabled = true;
   if ($('device-select').value)
-    vscode.postMessage({
-      type: 'deviceCapabilities',
-      deviceId: $('device-select').value,
-    });
+    send('deviceCapabilities', { deviceId: $('device-select').value });
 };
 $('copy-caps').onclick = () =>
-  vscode.postMessage({
-    type: 'copyCapabilities',
-    deviceId: $('device-select').value,
-  });
+  send('copyCapabilities', { deviceId: $('device-select').value });
 function showDevices(data) {
   const select = $('device-select');
   select.replaceChildren();
@@ -128,8 +124,8 @@ function showLoading(data) {
 }
 
 function showServer(data) {
-  $('server-state').textContent =
-    `${text.managedProcess}: ${data.running ? `${text.running} — ${data.url}` : text.stopped}`;
+  const state = data.running ? `${text.running} — ${data.url}` : text.stopped;
+  $('server-state').textContent = `${text.managedProcess}: ${state}`;
   $('stop').disabled = !data.running;
 }
 
@@ -148,8 +144,16 @@ const messageHandlers = {
   notice: showNotice,
 };
 
-window.addEventListener('message', ({ data }) =>
-  messageHandlers[data.type]?.(data),
-);
+window.addEventListener('message', ({ data }) => {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    typeof data.type !== 'string' ||
+    !Object.hasOwn(messageHandlers, data.type)
+  )
+    return;
+  messageHandlers[data.type](data);
+});
 send('ready');
 send('watchServer');

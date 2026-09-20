@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { t } from './i18n';
+import { launcherMessageTypes } from './webview-protocol';
 
 export interface UiText {
   selectDevice: string;
@@ -135,6 +136,10 @@ export function launcherHtml(
     '<',
     String.raw`\u003c`,
   );
+  const serializedProtocol = JSON.stringify(launcherMessageTypes).replaceAll(
+    '<',
+    String.raw`\u003c`,
+  );
   const labels = ja
     ? {
         intro: '公式 Inspector を VS Code の中で。',
@@ -201,5 +206,5 @@ export function launcherHtml(
         usage:
           'Edit capabilities and start or end sessions in the official Inspector. End sessions before stopping the server.',
       };
-  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main><h1>Appium Inspector Bridge</h1><p>${labels.intro}</p><label>Appium Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label><button id="launch">${labels.launch}</button><button id="open">${labels.open}</button><div class="row"><button id="stop">${labels.stop}</button><button id="logs">${labels.logs}</button></div><p id="server-state">${labels.state}</p><p id="connection-state" role="status" aria-live="polite">${labels.connection}</p><button id="reconnect">${labels.reconnect}</button><button id="check-environment">${labels.check}</button><details id="device-tools"><summary>${labels.devices}</summary><p>${labels.deviceHelp}</p><button id="list-devices">${labels.refresh}</button><p id="device-notes" role="status"></p><label>${labels.device}<select id="device-select" disabled><option value="">${labels.update}</option></select></label><label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label><button id="copy-caps" disabled>${labels.copyJson}</button><p>${details.device}</p></details><details id="environment" hidden><summary>${labels.environment}</summary><p>${details.env}</p><div id="environment-results" role="status" aria-live="polite"></div></details><details><summary>${labels.setup}</summary><p>${details.setup}</p><button id="install">${labels.install}</button><p>${details.drivers}</p></details><details><summary>${labels.usage}</summary><p>${details.usage}</p></details><p id="notice" role="status"></p></main><div id="loading" hidden role="status"><span id="loading-label">${text.working}</span></div><script nonce="${nonce}">window.appiumInspectorBridgeText=${serializedText};</script><script nonce="${nonce}" src="${script}"></script></body></html>`;
+  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main><h1>Appium Inspector Bridge</h1><p>${labels.intro}</p><label>Appium Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label><button id="launch">${labels.launch}</button><button id="open">${labels.open}</button><div class="row"><button id="stop">${labels.stop}</button><button id="logs">${labels.logs}</button></div><p id="server-state">${labels.state}</p><p id="connection-state" role="status" aria-live="polite">${labels.connection}</p><button id="reconnect">${labels.reconnect}</button><button id="check-environment">${labels.check}</button><details id="device-tools"><summary>${labels.devices}</summary><p>${labels.deviceHelp}</p><button id="list-devices">${labels.refresh}</button><p id="device-notes" role="status"></p><label>${labels.device}<select id="device-select" disabled><option value="">${labels.update}</option></select></label><label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label><button id="copy-caps" disabled>${labels.copyJson}</button><p>${details.device}</p></details><details id="environment" hidden><summary>${labels.environment}</summary><p>${details.env}</p><div id="environment-results" role="status" aria-live="polite"></div></details><details><summary>${labels.setup}</summary><p>${details.setup}</p><button id="install">${labels.install}</button><p>${details.drivers}</p></details><details><summary>${labels.usage}</summary><p>${details.usage}</p></details><p id="notice" role="status"></p></main><div id="loading" hidden role="status"><span id="loading-label">${text.working}</span></div><script nonce="${nonce}">window.appiumInspectorBridgeText=${serializedText};window.appiumInspectorBridgeProtocol=${serializedProtocol};</script><script nonce="${nonce}" src="${script}"></script></body></html>`;
 }

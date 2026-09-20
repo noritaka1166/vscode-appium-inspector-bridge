@@ -1,6 +1,7 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { AppiumServerController, normalizeServerUrl } from './appium-server';
 import { ConnectionMonitor, probeServer, serverKey } from './connection';
 import { capabilitiesFor, type DeviceReport, listDevices } from './devices';
 import {
@@ -12,9 +13,9 @@ import { setLanguage, t } from './i18n';
 import { startInspectorProxy } from './inspector-proxy';
 import { inspectorUrl, launcherHtml, officialHtml } from './official';
 import { settingKeys, validateSettings } from './settings';
+import { type LauncherMessage, parseLauncherMessage } from './webview-protocol';
 
 let output: vscode.OutputChannel;
-let serverProcess: ChildProcessWithoutNullStreams | undefined;
 const views = new Set<vscode.Webview>();
 let busy = false;
 let officialPanel: vscode.WebviewPanel | undefined;
@@ -25,7 +26,7 @@ let secrets: vscode.SecretStorage;
 let settingsWrites: Promise<void> = Promise.resolve();
 let environmentReport: EnvironmentReport | undefined;
 let connectionMonitor: ConnectionMonitor;
-let managedServerUrl: string | undefined;
+let appiumServer: AppiumServerController;
 let deviceReport: DeviceReport | undefined;
 let displayLanguage = 'ja';
 
@@ -34,14 +35,28 @@ export function activate(context: vscode.ExtensionContext): void {
   setLanguage(displayLanguage);
   extensionUri = context.extensionUri;
   secrets = context.secrets;
+  output = vscode.window.createOutputChannel('Appium Inspector Bridge');
+  appiumServer = new AppiumServerController(
+    output,
+    post,
+    resolveAppiumExecutable,
+    spawn,
+    async (title, detail, accept) =>
+      (await vscode.window.showWarningMessage(
+        title,
+        { modal: true, detail },
+        accept,
+      )) === accept,
+    fetch,
+  );
   connectionMonitor = new ConnectionMonitor(
     (state) => post({ type: 'connection', ...state }),
-    (url) => Boolean(serverProcess) && managedServerUrl === url,
+    (url) => appiumServer.manages(url),
     (url) => probeServer(url, fetch),
   );
-  output = vscode.window.createOutputChannel('Appium Inspector Bridge');
   context.subscriptions.push(
     connectionMonitor,
+    appiumServer,
     vscode.commands.registerCommand('appiumInspectorBridge.paste', async () => {
       if (officialPanel?.active && clipboardRelay) {
         await officialPanel.webview.postMessage({
@@ -95,8 +110,11 @@ class InspectorSidebarProvider implements vscode.WebviewViewProvider {
       webview.cspSource,
       displayLanguage,
     );
-    webview.onDidReceiveMessage((message: WebviewMessage) =>
-      handleMessage(message),
+    webview.onDidReceiveMessage(
+      (value: unknown): Thenable<void> | undefined => {
+        const message = parseLauncherMessage(value);
+        return message ? handleMessage(message) : undefined;
+      },
     );
     webviewView.onDidDispose(() => {
       views.delete(webview);
@@ -111,22 +129,6 @@ async function openInspector(): Promise<void> {
   );
 }
 
-type WebviewMessage =
-  | { type: 'deviceCapabilities' | 'copyCapabilities'; deviceId: string }
-  | { type: 'listDevices' }
-  | {
-      type: 'startOfficial' | 'openOfficial' | 'watchServer' | 'reconnect';
-      serverUrl: string;
-    }
-  | {
-      type:
-        | 'installOfficial'
-        | 'checkEnvironment'
-        | 'ready'
-        | 'stopServer'
-        | 'showOutput';
-    };
-
 interface InspectorMessage {
   bridge?: unknown;
   type?: unknown;
@@ -135,7 +137,7 @@ interface InspectorMessage {
   id?: unknown;
 }
 
-async function handleMessage(message: WebviewMessage): Promise<void> {
+async function handleMessage(message: LauncherMessage): Promise<void> {
   if (handlePassiveMessage(message)) return;
   if (busy) {
     return;
@@ -158,7 +160,7 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
   }
 }
 
-function handlePassiveMessage(message: WebviewMessage): boolean {
+function handlePassiveMessage(message: LauncherMessage): boolean {
   if (message.type === 'watchServer') {
     try {
       connectionMonitor.watch(message.serverUrl);
@@ -173,7 +175,11 @@ function handlePassiveMessage(message: WebviewMessage): boolean {
     return true;
   }
   if (message.type !== 'ready') return false;
-  postServerState();
+  post({
+    type: 'server',
+    running: appiumServer.isRunning,
+    url: appiumServer.url,
+  });
   if (environmentReport)
     post({ type: 'environment', report: environmentReport });
   if (deviceReport) post({ type: 'devices', report: deviceReport });
@@ -181,7 +187,7 @@ function handlePassiveMessage(message: WebviewMessage): boolean {
   return true;
 }
 
-async function dispatchMessage(message: WebviewMessage): Promise<void> {
+async function dispatchMessage(message: LauncherMessage): Promise<void> {
   switch (message.type) {
     case 'listDevices':
       return loadDevices();
@@ -200,7 +206,7 @@ async function dispatchMessage(message: WebviewMessage): Promise<void> {
       connectionMonitor.watch(message.serverUrl);
       return openOfficial(message.serverUrl);
     case 'stopServer':
-      return stopServer();
+      return appiumServer.stop();
     case 'showOutput':
       output.show(true);
       return;
@@ -221,7 +227,7 @@ async function loadDevices(): Promise<void> {
 
 async function copyCapabilities(
   message: Extract<
-    WebviewMessage,
+    LauncherMessage,
     { type: 'deviceCapabilities' | 'copyCapabilities' }
   >,
 ): Promise<void> {
@@ -272,7 +278,7 @@ async function reconnect(serverUrl: string): Promise<void> {
 }
 
 async function installOfficial(): Promise<void> {
-  if (serverProcess)
+  if (appiumServer.isRunning)
     throw new Error(
       t(
         'プラグインのインストール前に Server を停止してください。',
@@ -294,7 +300,7 @@ async function installOfficial(): Promise<void> {
 async function startOfficial(serverUrl: string): Promise<void> {
   inspectorUrl(serverUrl);
   connectionMonitor.watch(serverUrl);
-  if (await isServerReachable(normalizeServerUrl(serverUrl)))
+  if (await appiumServer.isReachable(normalizeServerUrl(serverUrl)))
     return openOfficial(serverUrl);
   const report = await inspectEnvironment();
   if (!report.canStart)
@@ -309,11 +315,11 @@ async function startOfficial(serverUrl: string): Promise<void> {
     active: true,
     label: t('Appium Server を起動しています…', 'Starting Appium Server…'),
   });
-  await startServer(serverUrl);
+  await appiumServer.start(serverUrl);
   await openOfficial(serverUrl);
 }
 
-function getLoadingLabel(message: WebviewMessage): string | undefined {
+function getLoadingLabel(message: LauncherMessage): string | undefined {
   switch (message.type) {
     case 'listDevices':
       return t(
@@ -601,7 +607,7 @@ async function installOfficialPlugin(): Promise<void> {
     );
   }
   output.show(true);
-  const appium = await appiumExecutable();
+  const appium = await resolveAppiumExecutable();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(appium, ['plugin', 'install', 'inspector'], {
       shell: false,
@@ -633,265 +639,15 @@ async function installOfficialPlugin(): Promise<void> {
   });
 }
 
-async function startServer(rawServerUrl: string): Promise<void> {
-  if (serverProcess) {
-    throw new Error(
-      t(
-        'この拡張機能から起動した Appium Server はすでに動作しています。',
-        'An Appium Server started by this extension is already running.',
-      ),
-    );
-  }
-
-  const serverUrl = normalizeServerUrl(rawServerUrl);
-  const url = new URL(serverUrl);
-  const permittedHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
-  if (!permittedHosts.has(url.hostname)) {
-    throw new Error(
-      t(
-        '拡張機能から起動できるのはローカル Appium Server のみです。localhost または 127.0.0.1 を指定してください。',
-        'This extension can start only a local Appium Server. Use localhost or 127.0.0.1.',
-      ),
-    );
-  }
-  if (await isServerReachable(serverUrl)) {
-    throw new Error(
-      t(
-        '指定した URL ではすでに Appium Server が応答しています。既存のサーバーへ接続してください。',
-        'An Appium Server is already responding at this URL. Connect to the existing server instead.',
-      ),
-    );
-  }
-
-  const port = url.port || '4723';
-  const address =
-    url.hostname === 'localhost'
-      ? '127.0.0.1'
-      : url.hostname.replace(/^\[|\]$/g, '');
-  const basePath = url.pathname.replace(/\/$/, '');
-  const args = [
-    '--address',
-    address,
-    '--port',
-    port,
-    '--use-plugins=inspector',
-    ...(basePath && basePath !== '/' ? ['--base-path', basePath] : []),
-  ];
-
-  output.appendLine(
-    t(
-      `Appium Server を起動します: appium ${args.join(' ')}`,
-      `Starting Appium Server: appium ${args.join(' ')}`,
-    ),
-  );
-  const child = spawn(await appiumExecutable(), args, { shell: false });
-  serverProcess = child;
-  managedServerUrl = serverKey(serverUrl);
-  child.stdout.on('data', (data) => output.append(data.toString()));
-  child.stderr.on('data', (data) => output.append(data.toString()));
-  child.on('error', (error: Error & { code?: string }) => {
-    if (serverProcess === child) {
-      serverProcess = undefined;
-      postServerState();
-    }
-    const message =
-      error.code === 'ENOENT'
-        ? t(
-            'appium コマンドが見つかりません。`npm install -g appium` を実行してから、VS Code を再起動してください。',
-            'appium command was not found. Run `npm install -g appium`, then restart VS Code.',
-          )
-        : t(
-            `Appium Server を起動できませんでした: ${error.message}`,
-            `Could not start Appium Server: ${error.message}`,
-          );
-    output.appendLine(message);
-    post({ type: 'notice', level: 'error', text: message });
-  });
-  child.on('close', (code, signal) => {
-    if (serverProcess === child) {
-      serverProcess = undefined;
-      postServerState();
-      const detail = signal
-        ? t(`シグナル ${signal}`, `signal ${signal}`)
-        : t(`終了コード ${code ?? '不明'}`, `exit code ${code ?? 'unknown'}`);
-      post({
-        type: 'notice',
-        level: code === 0 ? 'success' : 'error',
-        text: t(
-          `Appium Server が停止しました（${detail}）。`,
-          `Appium Server stopped (${detail}).`,
-        ),
-      });
-    }
-  });
-
-  await waitForServer(serverUrl, child);
-  postServerState();
-  post({
-    type: 'notice',
-    level: 'success',
-    text: t(
-      `Appium Server を起動しました: ${serverUrl}`,
-      `Appium Server started: ${serverUrl}`,
-    ),
-  });
-}
-
-async function appiumExecutable(): Promise<string> {
-  try {
-    return await resolveAppiumExecutable();
-  } catch {
-    throw new Error(
-      t(
-        'appium コマンドが見つかりません。`npm install -g appium` を実行してから、VS Code を再起動してください。',
-        'appium command was not found. Run `npm install -g appium`, then restart VS Code.',
-      ),
-    );
-  }
-}
-
-async function stopServer(): Promise<void> {
-  if (!serverProcess) {
-    throw new Error(
-      t(
-        'この拡張機能から起動した Appium Server はありません。',
-        'No Appium Server started by this extension is running.',
-      ),
-    );
-  }
-  const child = serverProcess;
-  const stop = t('停止する', 'Stop');
-  const choice = await vscode.window.showWarningMessage(
-    t('Appium Server を停止しますか？', 'Stop Appium Server?'),
-    {
-      modal: true,
-      detail: t(
-        'このサーバー上で実行中のすべてのセッションが利用できなくなります。他のテストにも影響する可能性があります。必要な設定を保存し、公式UIでセッションを終了してから続行してください。',
-        'All sessions on this server will become unavailable and other tests may be affected. Save settings and end sessions in the official UI before continuing.',
-      ),
-    },
-    stop,
-  );
-  if (choice !== stop || serverProcess !== child) return;
-  output.appendLine(
-    t('Appium Server を停止します。', 'Stopping Appium Server.'),
-  );
-  const closed = waitForProcessExit(child);
-  if (!child.kill('SIGTERM')) {
-    throw new Error(
-      t(
-        'Appium Server の停止要求を送信できませんでした。',
-        'Could not send the Appium Server stop request.',
-      ),
-    );
-  }
-  await closed;
-  post({
-    type: 'notice',
-    level: 'success',
-    text: t('Appium Server を停止しました。', 'Appium Server stopped.'),
-  });
-}
-
-function waitForProcessExit(
-  child: ChildProcessWithoutNullStreams,
-): Promise<void> {
-  if (child.exitCode !== null) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(
-        new Error(
-          t(
-            'Appium Server の停止がタイムアウトしました。出力パネルのログを確認してください。',
-            'Stopping Appium Server timed out. Check Logs.',
-          ),
-        ),
-      );
-    }, 10_000);
-    const onClose = (): void => {
-      cleanup();
-      resolve();
-    };
-    const cleanup = (): void => {
-      clearTimeout(timeout);
-      child.off('close', onClose);
-    };
-    child.once('close', onClose);
-  });
-}
-
-async function isServerReachable(serverUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${serverUrl}/status`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function waitForServer(
-  serverUrl: string,
-  child: ChildProcessWithoutNullStreams,
-): Promise<void> {
-  const timeoutAt = Date.now() + 15_000;
-  while (Date.now() < timeoutAt) {
-    if (serverProcess !== child || child.exitCode !== null) {
-      throw new Error(
-        t(
-          'Appium Server が起動直後に停止しました。出力パネルの Appium Inspector Bridge ログを確認してください。',
-          'Appium Server stopped immediately after starting. Check the Appium Inspector Bridge output log.',
-        ),
-      );
-    }
-    if (await isServerReachable(serverUrl)) {
-      return;
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(
-    t(
-      'Appium Server の起動がタイムアウトしました。出力パネルの Appium Inspector Bridge ログを確認してください。',
-      'Starting Appium Server timed out. Check the Appium Inspector Bridge output log.',
-    ),
-  );
-}
-
-function normalizeServerUrl(value: string): string {
-  let url = value.trim();
-  while (url.endsWith('/')) url = url.slice(0, -1);
-  if (!/^https?:\/\//i.test(url)) {
-    throw new Error(
-      t(
-        'Appium Server URL は http:// または https:// で始めてください。',
-        'Appium Server URL must start with http:// or https://.',
-      ),
-    );
-  }
-  return url;
-}
-
 function post(message: unknown): void {
   for (const view of views) {
     void view.postMessage(message);
   }
 }
 
-function postServerState(): void {
-  post({
-    type: 'server',
-    running: Boolean(serverProcess),
-    url: managedServerUrl,
-  });
-}
-
 export async function deactivate(): Promise<void> {
   connectionMonitor?.dispose();
   clipboardRelay?.close();
-  serverProcess?.kill('SIGTERM');
+  appiumServer?.dispose();
   await settingsWrites;
 }

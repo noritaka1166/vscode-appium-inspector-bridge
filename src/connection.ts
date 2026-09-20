@@ -17,10 +17,13 @@ export interface ConnectionState {
 export async function probeServer(
   url: string,
   request: typeof fetch = fetch,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   try {
     const response = await request(`${url}/status`, {
-      signal: AbortSignal.timeout(2000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(2000)])
+        : AbortSignal.timeout(2000),
       redirect: 'error',
     });
     if (!response.ok) return false;
@@ -34,12 +37,16 @@ export async function probeServer(
 
 export class ConnectionMonitor {
   private timer?: ReturnType<typeof setTimeout>;
+  private controller?: AbortController;
   private generation = 0;
   private state?: ConnectionState;
   constructor(
     private readonly publish: (state: ConnectionState) => void,
     private readonly managed: (url: string) => boolean,
-    private readonly probe = probeServer,
+    private readonly probe: (
+      url: string,
+      signal?: AbortSignal,
+    ) => Promise<boolean> = (url, signal) => probeServer(url, fetch, signal),
     private readonly interval = 5000,
   ) {}
 
@@ -56,8 +63,13 @@ export class ConnectionMonitor {
   }
   private async poll(generation: number): Promise<void> {
     if (!this.state) return;
-    const connected = await this.probe(this.state.url).catch(() => false);
+    const controller = new AbortController();
+    this.controller = controller;
+    const connected = await this.probe(this.state.url, controller.signal).catch(
+      () => false,
+    );
     if (generation !== this.generation) return;
+    this.controller = undefined;
     let owner = this.state.owner;
     if (this.managed(this.state.url)) owner = 'managed';
     else if (connected) owner = 'external';
@@ -75,6 +87,9 @@ export class ConnectionMonitor {
   }
   dispose(): void {
     this.generation++;
+    this.controller?.abort();
+    this.controller = undefined;
     if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
   }
 }
