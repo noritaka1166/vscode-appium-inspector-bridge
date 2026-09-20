@@ -33,6 +33,7 @@
     "color": "#0E639C",
     "theme": "dark"
   },
+  "icon": "media/marketplace-icon.png",
   "main": "./out/extension.js",
   "extensionKind": [
     "ui"
