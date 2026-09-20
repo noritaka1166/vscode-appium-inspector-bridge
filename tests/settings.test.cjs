@@ -2,7 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { settingKeys, validateSettings } = require('../out/settings');
+const {
+  InspectorSettingsStore,
+  settingKeys,
+  validateSettings,
+  withAttachServer,
+} = require('../out/settings');
 
 function frame(values, port) {
   class Storage {
@@ -93,4 +98,31 @@ test('only approved localStorage keys persist; unrelated storage is ignored', ()
   assert.deepEqual(validateSettings({ PREFERRED_THEME: '"dark"' }), {
     PREFERRED_THEME: '"dark"',
   });
+});
+
+test('saved settings recover from corrupt storage and serialize writes', async () => {
+  const data = new Map([['broken', '{']]);
+  const store = new InspectorSettingsStore({
+    get: async (key) => data.get(key),
+    store: async (key, value) => data.set(key, value),
+  });
+  assert.deepEqual(await store.load('broken'), { values: {}, recovered: true });
+  await Promise.all([
+    store.save('one', { PREFERRED_THEME: '"dark"' }),
+    store.save('two', { PREFERRED_LANGUAGE: '"en"' }),
+  ]);
+  await store.flush();
+  assert.deepEqual(JSON.parse(data.get('one')), { PREFERRED_THEME: '"dark"' });
+  assert.deepEqual(JSON.parse(data.get('two')), { PREFERRED_LANGUAGE: '"en"' });
+});
+
+test('attach settings ignore a malformed prior server block', () => {
+  const values = withAttachServer(
+    { SESSION_SERVER_PARAMS: 'not-json' },
+    'http://127.0.0.1:4723/wd/hub',
+  );
+  assert.deepEqual(JSON.parse(values.SESSION_SERVER_PARAMS), {
+    remote: { hostname: '127.0.0.1', port: '4723', path: '/wd/hub' },
+  });
+  assert.equal(values.SESSION_SERVER_TYPE, '"remote"');
 });

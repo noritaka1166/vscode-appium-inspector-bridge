@@ -1,49 +1,50 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { AppiumServerController, normalizeServerUrl } from './appium-server';
+import { runLoggedCommand } from './command-runner';
 import { ConnectionMonitor, probeServer, serverKey } from './connection';
 import { capabilitiesFor, type DeviceReport, listDevices } from './devices';
 import {
   checkEnvironment,
-  commandInvocation,
   type EnvironmentReport,
   resolveAppiumExecutable,
   resolveNpmExecutable,
 } from './environment';
 import { setLanguage, t } from './i18n';
+import { InspectorPanelManager } from './inspector-panel-manager';
 import { startInspectorProxy } from './inspector-proxy';
+import { LauncherController } from './launcher-controller';
 import { inspectorUrl, launcherHtml, officialHtml } from './official';
 import { listRunningSessions, type SessionReport } from './sessions';
-import { settingKeys, validateSettings } from './settings';
+import { InspectorSettingsStore } from './settings';
 import { type LauncherMessage, parseLauncherMessage } from './webview-protocol';
 
 let output: vscode.OutputChannel;
 const views = new Set<vscode.Webview>();
-let busy = false;
 let officialServer = 'http://127.0.0.1:4723';
 let extensionUri: vscode.Uri;
-let secrets: vscode.SecretStorage;
-let settingsWrites: Promise<void> = Promise.resolve();
 let environmentReport: EnvironmentReport | undefined;
 let connectionMonitor: ConnectionMonitor;
 let appiumServer: AppiumServerController;
 let deviceReport: DeviceReport | undefined;
 let sessionReport: SessionReport | undefined;
 let displayLanguage = 'ja';
-type InspectorRelay = Awaited<ReturnType<typeof startInspectorProxy>>;
-interface InspectorPanelState {
-  relay: InspectorRelay;
-  serverUrl: string;
-}
-const inspectorPanels = new Map<vscode.WebviewPanel, InspectorPanelState>();
+let launcherController: LauncherController;
+let inspectorPanels: InspectorPanelManager;
+let settings: InspectorSettingsStore;
 
 export function activate(context: vscode.ExtensionContext): void {
   displayLanguage = vscode.env?.language ?? 'ja';
   setLanguage(displayLanguage);
   extensionUri = context.extensionUri;
-  secrets = context.secrets;
   output = vscode.window.createOutputChannel('Appium Inspector Bridge');
+  settings = new InspectorSettingsStore(
+    context.secrets ?? {
+      get: async () => undefined,
+      store: async () => {},
+    },
+  );
   appiumServer = new AppiumServerController(
     output,
     post,
@@ -62,11 +63,50 @@ export function activate(context: vscode.ExtensionContext): void {
     (url) => appiumServer.manages(url),
     (url) => probeServer(url, fetch),
   );
+  inspectorPanels = new InspectorPanelManager(
+    {
+      vscode,
+      extensionUri,
+      language: displayLanguage,
+      readFile,
+      startProxy: startInspectorProxy,
+      createHtml: officialHtml,
+      post,
+      onAttachResult: postAttachResult,
+      onInvalidSettings: () =>
+        void vscode.window.showErrorMessage(
+          t(
+            'Inspector の保存設定が不正、またはサイズ上限（5 MB）を超えています。初期設定で開きます。',
+            'Inspector settings are invalid or exceed the 5 MB limit. Opening with defaults.',
+          ),
+        ),
+      onClipboardError: () =>
+        void vscode.window.showErrorMessage(
+          t(
+            'クリップボードを操作できませんでした。',
+            'Could not access the clipboard.',
+          ),
+        ),
+      onWebviewWarning: (text) => void vscode.window.showWarningMessage(text),
+      copyFailureMessage: t(
+        'クリップボードへコピーできませんでした。',
+        'Could not copy to the clipboard.',
+      ),
+    },
+    settings,
+  );
+  launcherController = new LauncherController(
+    post,
+    output,
+    handlePassiveMessage,
+    dispatchMessage,
+    getLoadingLabel,
+  );
   context.subscriptions.push(
     connectionMonitor,
     appiumServer,
     vscode.commands.registerCommand('appiumInspectorBridge.paste', async () => {
-      const inspector = activeInspectorPanel();
+      const inspector = inspectorPanels.active();
       if (inspector) {
         await inspector.panel.webview.postMessage({
           bridge: inspector.state.relay.token,
@@ -76,7 +116,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand('appiumInspectorBridge.copy', async () => {
-      const inspector = activeInspectorPanel();
+      const inspector = inspectorPanels.active();
       if (inspector)
         await inspector.panel.webview.postMessage({
           bridge: inspector.state.relay.token,
@@ -94,7 +134,10 @@ export function activate(context: vscode.ExtensionContext): void {
       openInspector,
     ),
     vscode.commands.registerCommand('appiumInspectorBridge.workspace', () =>
-      handleMessage({ type: 'openOfficial', serverUrl: officialServer }),
+      launcherController.handle({
+        type: 'openOfficial',
+        serverUrl: officialServer,
+      }),
     ),
   );
 }
@@ -123,7 +166,7 @@ class InspectorSidebarProvider implements vscode.WebviewViewProvider {
     webview.onDidReceiveMessage(
       (value: unknown): Thenable<void> | undefined => {
         const message = parseLauncherMessage(value);
-        return message ? handleMessage(message) : undefined;
+        return message ? launcherController.handle(message) : undefined;
       },
     );
     webviewView.onDidDispose(() => {
@@ -137,37 +180,6 @@ async function openInspector(): Promise<void> {
   await vscode.commands.executeCommand(
     'workbench.view.extension.appiumInspectorBridge',
   );
-}
-
-interface InspectorMessage {
-  bridge?: unknown;
-  type?: unknown;
-  values?: unknown;
-  text?: unknown;
-  id?: unknown;
-}
-
-async function handleMessage(message: LauncherMessage): Promise<void> {
-  if (handlePassiveMessage(message)) return;
-  if (busy) {
-    return;
-  }
-  busy = true;
-  const loadingLabel = getLoadingLabel(message);
-  if (loadingLabel)
-    post({ type: 'loading', active: true, label: loadingLabel });
-  try {
-    await dispatchMessage(message);
-  } catch (error) {
-    const text = error instanceof Error ? error.message : String(error);
-    output.appendLine(text);
-    post({ type: 'notice', level: 'error', text });
-  } finally {
-    busy = false;
-    if (loadingLabel) {
-      post({ type: 'loading', active: false });
-    }
-  }
 }
 
 function handlePassiveMessage(message: LauncherMessage): boolean {
@@ -194,7 +206,7 @@ function handlePassiveMessage(message: LauncherMessage): boolean {
     post({ type: 'environment', report: environmentReport });
   if (deviceReport) post({ type: 'devices', report: deviceReport });
   if (sessionReport) post({ type: 'sessions', report: sessionReport });
-  post({ type: 'loading', active: busy });
+  post({ type: 'loading', active: launcherController.isBusy });
   return true;
 }
 
@@ -389,14 +401,13 @@ async function installAppium(): Promise<void> {
       ),
     );
   }
-  await runCommand(
-    npm,
-    ['install', '-g', 'appium@3'],
-    t(
+  await runLoggedCommand(npm, ['install', '-g', 'appium@3'], {
+    output,
+    failure: t(
       'Appium 3 の導入に失敗しました。出力パネルのログを確認してください。',
       'Appium 3 installation failed. Check Logs.',
     ),
-  );
+  });
   await inspectEnvironment();
   post({
     type: 'notice',
@@ -547,82 +558,6 @@ async function inspectEnvironment(): Promise<EnvironmentReport> {
   return environmentReport;
 }
 
-async function handleInspectorSettings(
-  message: InspectorMessage,
-  settingsKey: string,
-  current: Record<string, string>,
-): Promise<Record<string, string>> {
-  try {
-    const values = validateSettings(message.values);
-    const snapshot = JSON.stringify(values);
-    const write = settingsWrites.then(() =>
-      secrets.store(settingsKey, snapshot),
-    );
-    settingsWrites = write.catch(() => undefined);
-    await write;
-    return values;
-  } catch {
-    void vscode.window.showErrorMessage(
-      t(
-        'Inspector の保存設定が不正、またはサイズ上限（5 MB）を超えています。',
-        'Inspector settings are invalid or exceed the 5 MB limit.',
-      ),
-    );
-    return current;
-  }
-}
-
-async function handleInspectorClipboard(
-  message: InspectorMessage,
-  panel: vscode.WebviewPanel,
-  relay: Awaited<ReturnType<typeof startInspectorProxy>>,
-): Promise<void> {
-  try {
-    if (message.type === 'paste')
-      await panel.webview.postMessage({
-        bridge: relay.token,
-        type: 'pasteText',
-        text: await vscode.env.clipboard.readText(),
-      });
-    if (message.type === 'copyText' && typeof message.text === 'string') {
-      await vscode.env.clipboard.writeText(message.text);
-      await panel.webview.postMessage({
-        bridge: relay.token,
-        type: 'copyResult',
-        id: message.id,
-      });
-    }
-    if (message.type === 'error' && typeof message.text === 'string')
-      void vscode.window.showWarningMessage(message.text);
-  } catch {
-    if (message.type === 'copyText')
-      await panel.webview.postMessage({
-        bridge: relay.token,
-        type: 'copyResult',
-        id: message.id,
-        error: t(
-          'クリップボードへコピーできませんでした。',
-          'Could not copy to the clipboard.',
-        ),
-      });
-    void vscode.window.showErrorMessage(
-      t(
-        'クリップボードを操作できませんでした。',
-        'Could not access the clipboard.',
-      ),
-    );
-  }
-}
-
-function activeInspectorPanel():
-  | { panel: vscode.WebviewPanel; state: InspectorPanelState }
-  | undefined {
-  for (const [panel, state] of inspectorPanels) {
-    if (panel.active) return { panel, state };
-  }
-  return undefined;
-}
-
 async function openOfficial(
   rawUrl: string,
   reuseExisting = false,
@@ -653,107 +588,12 @@ async function openOfficial(
   }
   officialServer = rawUrl;
   const normalizedServerUrl = normalizeServerUrl(rawUrl);
-  if (reuseExisting) {
-    for (const [panel, state] of inspectorPanels) {
-      if (state.serverUrl === normalizedServerUrl) {
-        panel.reveal();
-        return;
-      }
-    }
-  }
-  const bridgeLanguage = displayLanguage.toLowerCase().startsWith('ja')
-    ? 'ja'
-    : 'en';
-  const adapter = (
-    await readFile(
-      vscode.Uri.joinPath(extensionUri, 'media', 'clipboard-frame.js').fsPath,
-      'utf8',
-    )
-  ).replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
-  const storageAdapter = (
-    await readFile(
-      vscode.Uri.joinPath(extensionUri, 'media', 'storage-frame.js').fsPath,
-      'utf8',
-    )
-  ).replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
-  const settingsKey = `appiumInspectorBridge.settings.v1:${normalizedServerUrl}`;
-  await settingsWrites;
-  const saved = await secrets.get(settingsKey);
-  let values = saved ? validateSettings(JSON.parse(saved)) : {};
-  if (attachSessionId) {
-    const server = new URL(normalizedServerUrl);
-    const previous = values.SESSION_SERVER_PARAMS
-      ? (JSON.parse(values.SESSION_SERVER_PARAMS) as Record<string, unknown>)
-      : {};
-    const remote =
-      typeof previous.remote === 'object' && previous.remote !== null
-        ? (previous.remote as Record<string, unknown>)
-        : {};
-    values = {
-      ...values,
-      SESSION_SERVER_PARAMS: JSON.stringify({
-        ...previous,
-        remote: {
-          ...remote,
-          hostname: server.hostname,
-          port: server.port || '80',
-          path: server.pathname || '/',
-        },
-      }),
-      SESSION_SERVER_TYPE: JSON.stringify('remote'),
-    };
-  }
-  const relay = await startInspectorProxy(
+  await inspectorPanels.open(
     url,
-    adapter,
-    (token) =>
-      storageAdapter.replace('__INSPECTOR_STORAGE__', () =>
-        JSON.stringify({
-          token,
-          keys: settingKeys,
-          values,
-          upstreamPort: url.port || '80',
-        }).replaceAll('<', String.raw`\u003c`),
-      ),
-    t(
-      'Appium Server に接続できません。',
-      'Could not connect to Appium Server.',
-    ),
-  );
-  const panel = vscode.window.createWebviewPanel(
-    'appiumInspectorBridge.official',
-    `Appium Inspector Bridge · ${url.host}`,
-    inspectorPanels.size ? vscode.ViewColumn.Beside : vscode.ViewColumn.One,
-    {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-      localResourceRoots: [],
-    },
-  );
-  inspectorPanels.set(panel, { relay, serverUrl: normalizedServerUrl });
-  panel.webview.onDidReceiveMessage(async (message: InspectorMessage) => {
-    if (message?.bridge !== relay.token) return;
-    if (message.type === 'saveSettings') {
-      values = await handleInspectorSettings(message, settingsKey, values);
-      return;
-    }
-    if (message.type === 'attachResult') {
-      postAttachResult(message.text);
-      return;
-    }
-    if (!panel.active) return;
-    await handleInspectorClipboard(message, panel, relay);
-  });
-  panel.webview.html = officialHtml(
-    relay.url,
-    relay.token,
-    displayLanguage,
+    normalizedServerUrl,
     attachSessionId,
+    reuseExisting,
   );
-  panel.onDidDispose(() => {
-    relay.close();
-    inspectorPanels.delete(panel);
-  });
 }
 
 function postAttachResult(result: unknown): void {
@@ -792,62 +632,19 @@ async function installOfficialPlugin(): Promise<void> {
   }
   output.show(true);
   const appium = await resolveAppiumExecutable();
-  const invocation = commandInvocation(appium, [
-    'plugin',
-    'install',
-    'inspector',
-  ]);
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(invocation.command, invocation.args, {
-      shell: false,
-    });
-    child.stdout.on('data', (data) => output.append(data.toString()));
-    child.stderr.on('data', (data) => output.append(data.toString()));
-    child.once('error', (error) =>
-      reject(
-        new Error(
-          t(
-            `Appium を実行できません: ${error.message}`,
-            `Cannot run Appium: ${error.message}`,
-          ),
+  await runLoggedCommand(appium, ['plugin', 'install', 'inspector'], {
+    output,
+    failure: t(
+      'プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。',
+      'Plugin installation failed. Check Logs; if it is already installed, you can start normally.',
+    ),
+    startFailure: (error) =>
+      new Error(
+        t(
+          `Appium を実行できません: ${error.message}`,
+          `Cannot run Appium: ${error.message}`,
         ),
       ),
-    );
-    child.once('close', (code) =>
-      code === 0
-        ? resolve()
-        : reject(
-            new Error(
-              t(
-                'プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。',
-                'Plugin installation failed. Check Logs; if it is already installed, you can start normally.',
-              ),
-            ),
-          ),
-    );
-  });
-}
-
-async function runCommand(
-  command: string,
-  args: string[],
-  failure: string,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    let child: ChildProcessWithoutNullStreams;
-    try {
-      const invocation = commandInvocation(command, args);
-      child = spawn(invocation.command, invocation.args, { shell: false });
-    } catch (error) {
-      reject(error);
-      return;
-    }
-    child.stdout.on('data', (data) => output.append(data.toString()));
-    child.stderr.on('data', (data) => output.append(data.toString()));
-    child.once('error', (error) => reject(error));
-    child.once('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(failure)),
-    );
   });
 }
 
@@ -859,8 +656,7 @@ function post(message: unknown): void {
 
 export async function deactivate(): Promise<void> {
   connectionMonitor?.dispose();
-  for (const { relay } of inspectorPanels.values()) relay.close();
-  inspectorPanels.clear();
+  inspectorPanels?.dispose();
   appiumServer?.dispose();
-  await settingsWrites;
+  await settings?.flush();
 }
