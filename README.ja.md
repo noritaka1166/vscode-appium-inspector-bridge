@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-公式 Appium Inspector プラグインのWeb UIを、VS Codeのエディタータブ内で利用する非公式拡張です。v0.3.3以降は独自の簡易Inspectorを廃止し、公式UIに一本化しています。
+公式 Appium Inspector プラグインのWeb UIを、VS Codeのエディタータブ内で利用する非公式拡張です。独自のInspector実装ではなく、公式UIをそのまま利用します。
 
 ## 主な機能
 

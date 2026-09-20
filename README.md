@@ -2,7 +2,7 @@
 
 [日本語版 README](README.ja.md)
 
-An unofficial VS Code extension that embeds the official Appium Inspector web UI in an editor tab. Since v0.3.3, it uses the official Inspector UI exclusively instead of maintaining a separate lightweight inspector.
+An unofficial VS Code extension that embeds the official Appium Inspector web UI in an editor tab. It uses the official Inspector UI exclusively rather than maintaining a separate inspector implementation.
 
 ## Features
 

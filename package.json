@@ -2,7 +2,7 @@
   "name": "appium-inspector-bridge",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.3.9",
+  "version": "0.1.0",
   "publisher": "noritaka1166",
   "license": "MIT",
   "repository": {
