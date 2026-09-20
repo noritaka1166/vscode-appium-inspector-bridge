@@ -46,11 +46,11 @@ test('webviews follow the VS Code display language', () => {
   assert.equal(webviewText('ja').connected, '接続中');
   assert.match(
     launcherHtml('launcher.js', 'launcher.css', 'test:', 'en'),
-    /Start and Open Official Inspector/,
+    /Start and Open a New Inspector Tab/,
   );
   assert.match(
     launcherHtml('launcher.js', 'launcher.css', 'test:', 'ja'),
-    /起動して公式 Inspector を開く/,
+    /起動して新しい Inspector タブを開く/,
   );
   assert.match(
     officialHtml(inspectorUrl('http://localhost:4723'), '', 'en'),

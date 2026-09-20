@@ -19,10 +19,8 @@ import { type LauncherMessage, parseLauncherMessage } from './webview-protocol';
 let output: vscode.OutputChannel;
 const views = new Set<vscode.Webview>();
 let busy = false;
-let officialPanel: vscode.WebviewPanel | undefined;
 let officialServer = 'http://127.0.0.1:4723';
 let extensionUri: vscode.Uri;
-let clipboardRelay: Awaited<ReturnType<typeof startInspectorProxy>> | undefined;
 let secrets: vscode.SecretStorage;
 let settingsWrites: Promise<void> = Promise.resolve();
 let environmentReport: EnvironmentReport | undefined;
@@ -30,6 +28,12 @@ let connectionMonitor: ConnectionMonitor;
 let appiumServer: AppiumServerController;
 let deviceReport: DeviceReport | undefined;
 let displayLanguage = 'ja';
+type InspectorRelay = Awaited<ReturnType<typeof startInspectorProxy>>;
+interface InspectorPanelState {
+  relay: InspectorRelay;
+  serverUrl: string;
+}
+const inspectorPanels = new Map<vscode.WebviewPanel, InspectorPanelState>();
 
 export function activate(context: vscode.ExtensionContext): void {
   displayLanguage = vscode.env?.language ?? 'ja';
@@ -59,18 +63,20 @@ export function activate(context: vscode.ExtensionContext): void {
     connectionMonitor,
     appiumServer,
     vscode.commands.registerCommand('appiumInspectorBridge.paste', async () => {
-      if (officialPanel?.active && clipboardRelay) {
-        await officialPanel.webview.postMessage({
-          bridge: clipboardRelay.token,
+      const inspector = activeInspectorPanel();
+      if (inspector) {
+        await inspector.panel.webview.postMessage({
+          bridge: inspector.state.relay.token,
           type: 'pasteText',
           text: await vscode.env.clipboard.readText(),
         });
       }
     }),
     vscode.commands.registerCommand('appiumInspectorBridge.copy', async () => {
-      if (officialPanel?.active && clipboardRelay)
-        await officialPanel.webview.postMessage({
-          bridge: clipboardRelay.token,
+      const inspector = activeInspectorPanel();
+      if (inspector)
+        await inspector.panel.webview.postMessage({
+          bridge: inspector.state.relay.token,
           type: 'copy',
         });
     }),
@@ -271,7 +277,7 @@ async function reconnect(serverUrl: string): Promise<void> {
         'Cannot connect to Appium Server. Start an extension-managed server with “Start and Open Official Inspector”; start external servers at their original source, then reconnect.',
       ),
     );
-  await openOfficial(serverUrl);
+  await openOfficial(serverUrl, true);
   post({
     type: 'notice',
     level: 'success',
@@ -514,9 +520,9 @@ async function handleInspectorReload(
       },
       reload,
     );
-    if (choice !== reload || officialPanel !== panel) return;
+    if (choice !== reload || !inspectorPanels.has(panel)) return;
     await settingsWrites;
-    if (officialPanel === panel)
+    if (inspectorPanels.has(panel))
       await panel.webview.postMessage({
         bridge: relay.token,
         type: 'reloadConfirmed',
@@ -600,7 +606,19 @@ async function handleInspectorClipboard(
   }
 }
 
-async function openOfficial(rawUrl: string): Promise<void> {
+function activeInspectorPanel():
+  | { panel: vscode.WebviewPanel; state: InspectorPanelState }
+  | undefined {
+  for (const [panel, state] of inspectorPanels) {
+    if (panel.active) return { panel, state };
+  }
+  return undefined;
+}
+
+async function openOfficial(
+  rawUrl: string,
+  reuseExisting = false,
+): Promise<void> {
   const url = inspectorUrl(rawUrl);
   let response: Response;
   try {
@@ -625,18 +643,14 @@ async function openOfficial(rawUrl: string): Promise<void> {
     );
   }
   officialServer = rawUrl;
-  if (officialPanel) {
-    officialPanel.reveal();
-    // Preserve the live iframe/session when the same server is opened again.
-    if (officialPanel.title === `Appium Inspector Bridge · ${url.host}`) {
-      return;
+  const normalizedServerUrl = normalizeServerUrl(rawUrl);
+  if (reuseExisting) {
+    for (const [panel, state] of inspectorPanels) {
+      if (state.serverUrl === normalizedServerUrl) {
+        panel.reveal();
+        return;
+      }
     }
-    throw new Error(
-      t(
-        '別サーバーを開く場合は、現在の公式 Inspector タブを閉じてから開いてください。',
-        'Close the current official Inspector tab before opening another server.',
-      ),
-    );
   }
   const bridgeLanguage = displayLanguage.toLowerCase().startsWith('ja')
     ? 'ja'
@@ -653,7 +667,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
       'utf8',
     )
   ).replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
-  const settingsKey = `appiumInspectorBridge.settings.v1:${normalizeServerUrl(rawUrl)}`;
+  const settingsKey = `appiumInspectorBridge.settings.v1:${normalizedServerUrl}`;
   await settingsWrites;
   const saved = await secrets.get(settingsKey);
   let values = saved ? validateSettings(JSON.parse(saved)) : {};
@@ -674,18 +688,17 @@ async function openOfficial(rawUrl: string): Promise<void> {
       'Could not connect to Appium Server.',
     ),
   );
-  clipboardRelay = relay;
   const panel = vscode.window.createWebviewPanel(
     'appiumInspectorBridge.official',
     `Appium Inspector Bridge · ${url.host}`,
-    vscode.ViewColumn.One,
+    inspectorPanels.size ? vscode.ViewColumn.Beside : vscode.ViewColumn.One,
     {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [],
     },
   );
-  officialPanel = panel;
+  inspectorPanels.set(panel, { relay, serverUrl: normalizedServerUrl });
   const reloadState = { pending: false };
   panel.webview.onDidReceiveMessage(async (message: InspectorMessage) => {
     if (message?.bridge !== relay.token) return;
@@ -703,8 +716,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
   panel.webview.html = officialHtml(relay.url, relay.token, displayLanguage);
   panel.onDidDispose(() => {
     relay.close();
-    clipboardRelay = undefined;
-    officialPanel = undefined;
+    inspectorPanels.delete(panel);
   });
 }
 
@@ -780,7 +792,8 @@ function post(message: unknown): void {
 
 export async function deactivate(): Promise<void> {
   connectionMonitor?.dispose();
-  clipboardRelay?.close();
+  for (const { relay } of inspectorPanels.values()) relay.close();
+  inspectorPanels.clear();
   appiumServer?.dispose();
   await settingsWrites;
 }

@@ -155,8 +155,8 @@ export function launcherHtml(
   const labels = ja
     ? {
         intro: '公式 Inspector を VS Code の中で。',
-        launch: '起動して公式 Inspector を開く',
-        open: '起動済みの Inspector を開く',
+        launch: '起動して新しい Inspector タブを開く',
+        open: '新しい Inspector タブで開く',
         stop: 'Server 停止',
         logs: 'ログ',
         state: '拡張管理プロセス: 停止中',
@@ -177,8 +177,8 @@ export function launcherHtml(
       }
     : {
         intro: 'Use the official Inspector inside VS Code.',
-        launch: 'Start and Open Official Inspector',
-        open: 'Open Running Inspector',
+        launch: 'Start and Open a New Inspector Tab',
+        open: 'Open in a New Inspector Tab',
         stop: 'Stop Server',
         logs: 'Logs',
         state: 'Extension-managed process: Stopped',
@@ -206,7 +206,7 @@ export function launcherHtml(
           'Appium 3 と Inspector プラグインが必要です。下のボタンは現在の Appium 環境に公式プラグインをインストールします。',
         drivers: 'Android / iOS ドライバーは別途必要です。',
         usage:
-          'Capabilities の編集・セッションの開始／終了は、開いた公式 Inspector 内で行います。Server を停止する前にセッションを終了してください。',
+          'Capabilities の編集・セッションの開始／終了は、開いた公式 Inspector 内で行います。「新しい Inspector タブで開く」を使うと複数セッションを並べて確認できます。Server を停止する前にセッションを終了してください。',
       }
     : {
         device:
@@ -216,7 +216,7 @@ export function launcherHtml(
           'Appium 3 and the Inspector plugin are required. This installs the official plugin in the current Appium environment.',
         drivers: 'Install Android / iOS drivers separately.',
         usage:
-          'Edit capabilities and start or end sessions in the official Inspector. End sessions before stopping the server.',
+          'Edit capabilities and start or end sessions in the official Inspector. Use Open in a New Inspector Tab to inspect multiple sessions side by side. End sessions before stopping the server.',
       };
   return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main><h1>Appium Inspector Bridge</h1><p>${labels.intro}</p><label>Appium Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label><button id="launch">${labels.launch}</button><button id="open">${labels.open}</button><div class="row"><button id="stop">${labels.stop}</button><button id="logs">${labels.logs}</button></div><p id="server-state">${labels.state}</p><p id="connection-state" role="status" aria-live="polite">${labels.connection}</p><button id="reconnect">${labels.reconnect}</button><button id="check-environment">${labels.check}</button><details id="device-tools"><summary>${labels.devices}</summary><p>${labels.deviceHelp}</p><button id="list-devices">${labels.refresh}</button><p id="device-notes" role="status"></p><label>${labels.device}<select id="device-select" disabled><option value="">${labels.update}</option></select></label><label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label><button id="copy-caps" disabled>${labels.copyJson}</button><p>${details.device}</p></details><details id="environment" hidden><summary>${labels.environment}</summary><p>${details.env}</p><div id="environment-results" role="status" aria-live="polite"></div></details><details><summary>${labels.setup}</summary><p>${details.setup}</p><button id="install">${labels.install}</button><p>${details.drivers}</p></details><details><summary>${labels.usage}</summary><p>${details.usage}</p></details><p id="notice" role="status"></p></main><div id="loading" hidden role="status"><span id="loading-label">${text.working}</span></div><script nonce="${nonce}">window.appiumInspectorBridgeText=${serializedText};window.appiumInspectorBridgeProtocol=${serializedProtocol};</script><script nonce="${nonce}" src="${script}"></script></body></html>`;
 }

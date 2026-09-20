@@ -12,6 +12,7 @@ function host() {
     choose = async () => undefined,
     spawned = false,
     kills = 0;
+  const panels = [];
   const dialogs = [],
     events = [],
     requests = [];
@@ -43,7 +44,7 @@ function host() {
   const vscode = {
     workspace: { isTrusted: true },
     commands: { registerCommand() {} },
-    ViewColumn: { One: 1 },
+    ViewColumn: { One: 1, Beside: 2 },
     Uri: {
       joinPath: (...parts) => ({
         fsPath: parts.join('/'),
@@ -55,8 +56,8 @@ function host() {
       registerWebviewViewProvider: (_, p) => {
         provider = p;
       },
-      createWebviewPanel: (_, title) =>
-        (panel = {
+      createWebviewPanel: (_, title) => {
+        panel = {
           title,
           active: true,
           webview: view(),
@@ -64,7 +65,10 @@ function host() {
           onDidDispose(cb) {
             dispose = cb;
           },
-        }),
+        };
+        panels.push(panel);
+        return panel;
+      },
       showWarningMessage: (...args) => {
         dialogs.push(args);
         return choose(...args);
@@ -135,6 +139,9 @@ function host() {
         type: 'reconnect',
         serverUrl: 'http://127.0.0.1:4723',
       }),
+    open: (serverUrl = 'http://127.0.0.1:4723') =>
+      sidebar.receive({ type: 'openOfficial', serverUrl }),
+    panels: () => panels,
     html: () => panel.webview.html,
     start: () =>
       sidebar.receive({
@@ -188,6 +195,15 @@ test('reconnect preserves Inspector and session; unreachable server is not start
     online.requests.some((url) => url.includes('/session')),
     false,
   );
+});
+test('opening an Inspector again creates an independent editor tab', async () => {
+  const h = host();
+  await h.start();
+  const first = h.panels()[0];
+  await h.open();
+  assert.equal(h.panels().length, 2);
+  assert.notEqual(h.panels()[1].webview, first.webview);
+  assert.match(h.panels()[1].title, /Appium Inspector Bridge/);
 });
 test('reload requires approval, rejects foreign token, and ignores duplicate requests', async () => {
   const h = host();

@@ -13,6 +13,7 @@ Initial public release.
 - Check the local Appium version, Inspector plugin, and installed drivers before starting a server.
 - Offer guided remediation for Appium, the Inspector plugin, and platform drivers from Environment Check.
 - Show server connection state and reconnect without creating a new session.
+- Open multiple independent Inspector tabs for side-by-side sessions.
 - List Android devices and iOS simulators, and generate capability JSON templates.
 - Persist approved Inspector settings per Server URL in VS Code SecretStorage.
 - Bridge copy and paste between VS Code and the embedded Inspector, including Selected Element values.
@@ -32,6 +33,7 @@ Initial public release.
 - Appium・Inspectorプラグイン・ドライバーの起動前チェック
 - 環境チェックからのAppium・Inspectorプラグイン・プラットフォームドライバーの対処導線
 - セッションを作り直さない接続状態表示と再接続
+- 複数の独立したInspectorタブを開く、セッションの並列確認
 - Android端末・iOSシミュレーター一覧とCapabilities JSONひな形生成
 - Server URL単位で承認済みInspector設定をVS Code SecretStorageへ保存
 - Selected Elementを含む、VS Codeと埋め込みInspector間のコピー・貼り付け連携
