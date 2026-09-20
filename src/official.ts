@@ -24,6 +24,8 @@ export interface UiText {
   installAppium: string;
   installOfficial: string;
   showDriverGuide: string;
+  noSessions: string;
+  attach: string;
 }
 const japanese = (language?: string): boolean =>
   language?.toLowerCase().startsWith('ja') ?? false;
@@ -52,6 +54,8 @@ export function webviewText(language?: string): UiText {
         installAppium: 'Appium 3 をインストール',
         installOfficial: 'Inspector プラグインをインストール',
         showDriverGuide: 'ドライバーの導入方法を表示',
+        noSessions: '起動中セッションはありません',
+        attach: 'Attach',
       }
     : {
         selectDevice: 'Select a device',
@@ -75,6 +79,8 @@ export function webviewText(language?: string): UiText {
         installAppium: 'Install Appium 3',
         installOfficial: 'Install Inspector plugin',
         showDriverGuide: 'Show driver installation options',
+        noSessions: 'No running sessions found',
+        attach: 'Attach',
       };
 }
 
@@ -112,6 +118,7 @@ export function officialHtml(
   url: URL,
   bridgeToken = '',
   language?: string,
+  attachSessionId?: string,
 ): string {
   const nonce = randomUUID(),
     ja = japanese(language),
@@ -132,7 +139,7 @@ export function officialHtml(
         reload: 'Reload',
         title: 'Official Appium Inspector',
       };
-  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">html,body{margin:0;height:100%;overflow:hidden;background:var(--vscode-editor-background);color:var(--vscode-foreground);font:12px var(--vscode-font-family)}body{display:grid;grid-template-rows:30px 1fr}header{display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--vscode-panel-border)}span{opacity:.7}iframe{border:0;width:100%;height:100%;background:white}button{margin-left:auto;border:0;background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer}</style></head><body><header>Appium Inspector <span>${href}</span><button id="select-all">${labels.all}</button><button id="copy">${labels.copy}</button><button id="paste">${labels.paste}</button><button id="reload">${labels.reload}</button></header><iframe id="inspector" title="${labels.title}" src="${href}" allow="clipboard-read; clipboard-write; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe><script nonce="${nonce}">const vscode=acquireVsCodeApi(),token=${JSON.stringify(bridgeToken)},frame=document.getElementById('inspector'),origin=${JSON.stringify(url.origin)};const send=type=>vscode.postMessage({type,bridge:token});document.getElementById('paste').onclick=()=>send('paste');document.getElementById('select-all').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'selectAll'},origin);document.getElementById('copy').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'copy'},origin);document.getElementById('reload').onclick=()=>send('requestReload');window.addEventListener('message',event=>{const m=event.data;if(!m||m.bridge!==token)return;if(event.source!==frame.contentWindow&&m.type==='reloadConfirmed'){frame.src=frame.src;return;}if(event.source===frame.contentWindow&&event.origin===origin){if(['paste','copyText','error','saveSettings'].includes(m.type))vscode.postMessage(m);}else if(event.source!==frame.contentWindow&&['pasteText','copy','copyResult'].includes(m.type)){frame.contentWindow.postMessage(m,origin);}});</script></body></html>`;
+  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">html,body{margin:0;height:100%;overflow:hidden;background:var(--vscode-editor-background);color:var(--vscode-foreground);font:12px var(--vscode-font-family)}body{display:grid;grid-template-rows:30px 1fr}header{display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--vscode-panel-border)}span{opacity:.7}iframe{border:0;width:100%;height:100%;background:white}button{margin-left:auto;border:0;background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer}</style></head><body><header>Appium Inspector <span>${href}</span><button id="select-all">${labels.all}</button><button id="copy">${labels.copy}</button><button id="paste">${labels.paste}</button><button id="reload">${labels.reload}</button></header><iframe id="inspector" title="${labels.title}" src="${href}" allow="clipboard-read; clipboard-write; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe><script nonce="${nonce}">const vscode=acquireVsCodeApi(),token=${JSON.stringify(bridgeToken)},frame=document.getElementById('inspector'),origin=${JSON.stringify(url.origin)},attachSessionId=${JSON.stringify(attachSessionId ?? '')};const send=type=>vscode.postMessage({type,bridge:token});document.getElementById('paste').onclick=()=>send('paste');document.getElementById('select-all').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'selectAll'},origin);document.getElementById('copy').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'copy'},origin);document.getElementById('reload').onclick=()=>send('requestReload');if(attachSessionId)frame.addEventListener('load',()=>frame.contentWindow.postMessage({bridge:token,type:'prepareAttach',sessionId:attachSessionId},origin));window.addEventListener('message',event=>{const m=event.data;if(!m||m.bridge!==token)return;if(event.source!==frame.contentWindow&&m.type==='reloadConfirmed'){frame.src=frame.src;return;}if(event.source===frame.contentWindow&&event.origin===origin){if(['paste','copyText','error','saveSettings','attachResult'].includes(m.type))vscode.postMessage(m);}else if(event.source!==frame.contentWindow&&['pasteText','copy','copyResult'].includes(m.type)){frame.contentWindow.postMessage(m,origin);}});</script></body></html>`;
 }
 
 export function launcherHtml(
@@ -164,6 +171,10 @@ export function launcherHtml(
         reconnect: '再接続',
         check: '環境チェック',
         devices: '端末・Capabilities',
+        sessions: '起動中セッション',
+        sessionHelp:
+          '選択したセッションを新しい公式 Inspector タブへ接続します。',
+        refreshSessions: 'セッション一覧を更新',
         deviceHelp:
           'ローカル端末を選んでJSONを生成します。端末の自動起動は行いません。',
         refresh: '端末一覧を更新',
@@ -186,6 +197,10 @@ export function launcherHtml(
         reconnect: 'Reconnect',
         check: 'Check Environment',
         devices: 'Devices & Capabilities',
+        sessions: 'Running Sessions',
+        sessionHelp:
+          'Attach the selected session in a new official Inspector tab.',
+        refreshSessions: 'Refresh Sessions',
         deviceHelp:
           'Generate JSON from a local device. This does not start devices.',
         refresh: 'Refresh Devices',
@@ -218,5 +233,5 @@ export function launcherHtml(
         usage:
           'Edit capabilities and start or end sessions in the official Inspector. Use Open in a New Inspector Tab to inspect multiple sessions side by side. End sessions before stopping the server.',
       };
-  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main><h1>Appium Inspector Bridge</h1><p>${labels.intro}</p><label>Appium Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label><button id="launch">${labels.launch}</button><button id="open">${labels.open}</button><div class="row"><button id="stop">${labels.stop}</button><button id="logs">${labels.logs}</button></div><p id="server-state">${labels.state}</p><p id="connection-state" role="status" aria-live="polite">${labels.connection}</p><button id="reconnect">${labels.reconnect}</button><button id="check-environment">${labels.check}</button><details id="device-tools"><summary>${labels.devices}</summary><p>${labels.deviceHelp}</p><button id="list-devices">${labels.refresh}</button><p id="device-notes" role="status"></p><label>${labels.device}<select id="device-select" disabled><option value="">${labels.update}</option></select></label><label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label><button id="copy-caps" disabled>${labels.copyJson}</button><p>${details.device}</p></details><details id="environment" hidden><summary>${labels.environment}</summary><p>${details.env}</p><div id="environment-results" role="status" aria-live="polite"></div></details><details><summary>${labels.setup}</summary><p>${details.setup}</p><button id="install">${labels.install}</button><p>${details.drivers}</p></details><details><summary>${labels.usage}</summary><p>${details.usage}</p></details><p id="notice" role="status"></p></main><div id="loading" hidden role="status"><span id="loading-label">${text.working}</span></div><script nonce="${nonce}">window.appiumInspectorBridgeText=${serializedText};window.appiumInspectorBridgeProtocol=${serializedProtocol};</script><script nonce="${nonce}" src="${script}"></script></body></html>`;
+  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main><h1>Appium Inspector Bridge</h1><p>${labels.intro}</p><label>Appium Server URL<input id="server-url" value="http://127.0.0.1:4723" spellcheck="false"></label><button id="launch">${labels.launch}</button><button id="open">${labels.open}</button><div class="row"><button id="stop">${labels.stop}</button><button id="logs">${labels.logs}</button></div><p id="server-state">${labels.state}</p><p id="connection-state" role="status" aria-live="polite">${labels.connection}</p><button id="reconnect">${labels.reconnect}</button><button id="check-environment">${labels.check}</button><details id="running-sessions"><summary>${labels.sessions}</summary><p>${labels.sessionHelp}</p><button id="list-sessions">${labels.refreshSessions}</button><div id="session-list" role="status" aria-live="polite"></div></details><details id="device-tools"><summary>${labels.devices}</summary><p>${labels.deviceHelp}</p><button id="list-devices">${labels.refresh}</button><p id="device-notes" role="status"></p><label>${labels.device}<select id="device-select" disabled><option value="">${labels.update}</option></select></label><label>Capabilities JSON<textarea id="device-caps" rows="8" readonly spellcheck="false"></textarea></label><button id="copy-caps" disabled>${labels.copyJson}</button><p>${details.device}</p></details><details id="environment" hidden><summary>${labels.environment}</summary><p>${details.env}</p><div id="environment-results" role="status" aria-live="polite"></div></details><details><summary>${labels.setup}</summary><p>${details.setup}</p><button id="install">${labels.install}</button><p>${details.drivers}</p></details><details><summary>${labels.usage}</summary><p>${details.usage}</p></details><p id="notice" role="status"></p></main><div id="loading" hidden role="status"><span id="loading-label">${text.working}</span></div><script nonce="${nonce}">window.appiumInspectorBridgeText=${serializedText};window.appiumInspectorBridgeProtocol=${serializedProtocol};</script><script nonce="${nonce}" src="${script}"></script></body></html>`;
 }

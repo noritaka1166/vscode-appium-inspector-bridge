@@ -58,6 +58,45 @@
   function notify(type, text) {
     parent.postMessage({ bridge: token, type, text }, targetOrigin);
   }
+  let attachPrepared = false;
+  function nativeValue(field, value) {
+    const prototype =
+      field instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, 'value').set.call(field, value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function textButton(expression) {
+    return [...document.querySelectorAll('button,[role="tab"]')].find((node) =>
+      expression.test((node.textContent || '').trim()),
+    );
+  }
+  async function prepareAttach(sessionId) {
+    if (attachPrepared) return;
+    attachPrepared = true;
+    const tab =
+      textButton(/^attach to session$/i) || textButton(/^セッションに接続$/);
+    tab?.click();
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const field = [...document.querySelectorAll('input')].find((input) => {
+        const hint = `${input.name} ${input.placeholder} ${input.getAttribute('aria-label') || ''}`;
+        return input.type !== 'hidden' && /session.*id|id.*session/i.test(hint);
+      });
+      if (!field) continue;
+      nativeValue(field, sessionId);
+      const attach = textButton(/^attach$/i) || textButton(/^接続$/);
+      if (attach && !attach.disabled) {
+        attach.click();
+        notify('attachResult', 'attached');
+      } else {
+        notify('attachResult', 'prepared');
+      }
+      return;
+    }
+    notify('attachResult', 'manual');
+  }
   document.addEventListener(
     'keydown',
     (event) => {
@@ -112,6 +151,13 @@
     }
     if (event.data.type === 'copy') {
       copy();
+      return;
+    }
+    if (
+      event.data.type === 'prepareAttach' &&
+      typeof event.data.sessionId === 'string'
+    ) {
+      void prepareAttach(event.data.sessionId);
       return;
     }
     if (event.data.type !== 'pasteText' || typeof event.data.text !== 'string')

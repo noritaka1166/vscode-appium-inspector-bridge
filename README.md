@@ -12,6 +12,7 @@ An unofficial VS Code extension that embeds the official Appium Inspector web UI
 - Offer guided remediation from Environment Check, including Appium installation, Inspector plugin installation, and driver installation commands.
 - Show connection status and reconnect without creating a new session.
 - Open multiple independent Inspector tabs, automatically placing additional tabs beside the first for side-by-side Android and iOS sessions.
+- List running sessions on the selected Appium Server and attach one in a new Inspector tab.
 - List Android devices and iOS simulators, then generate a capability JSON template.
 - Persist official Inspector capability sets, connection details, theme, language, and saved gestures in VS Code SecretStorage.
 - Bridge copy and paste between the official Inspector iframe and VS Code, including Selected Element values.
@@ -29,10 +30,16 @@ Start VS Code from an environment where `appium` is available on `PATH`. On Wind
 
 1. Open **Appium Inspector** from the Activity Bar, or press `⌘⌥A` (`Ctrl+Alt+A` on Windows/Linux).
 2. Under **Initial Setup**, select **Install Official Plugin** if needed.
-3. Select **Start and Open Official Inspector**. The extension starts Appium with `--use-plugins=inspector` and opens `/inspector` in an editor tab.
+3. Select **Start and Open Official Inspector**. The extension starts Appium with `--use-plugins=inspector` and session discovery enabled, then opens `/inspector` in an editor tab.
 4. Configure capabilities and create or end sessions in the official Inspector UI.
 
 To use an existing server, select **Open Running Inspector**. If the server was started without the plugin, stop it at its original source and restart it with `--use-plugins=inspector`. The Inspector UI is always at `/inspector`, even when Appium uses a base path such as `/wd/hub`; configure that real base path in the official Inspector's Server Details.
+
+### Attach to a running session
+
+Open **Running Sessions** in the sidebar and select **Refresh Sessions**. Choose **Attach** for the target session to open a new Inspector tab. The bridge opens the official Inspector's Attach to Session flow with the target session ID; when an older Inspector version cannot automate that field, the ID remains in the clipboard for manual pasting.
+
+Appium 3 protects the session list behind its `session_discovery` insecure feature. Servers started by this extension enable it only on the loopback interface. For an externally started local server, add `--allow-insecure=*:session_discovery` to its start command. This makes session metadata visible to local clients, so do not use it on an untrusted network interface.
 
 ## Devices and capabilities
 

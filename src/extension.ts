@@ -13,6 +13,7 @@ import {
 import { setLanguage, t } from './i18n';
 import { startInspectorProxy } from './inspector-proxy';
 import { inspectorUrl, launcherHtml, officialHtml } from './official';
+import { listRunningSessions, type SessionReport } from './sessions';
 import { settingKeys, validateSettings } from './settings';
 import { type LauncherMessage, parseLauncherMessage } from './webview-protocol';
 
@@ -27,6 +28,7 @@ let environmentReport: EnvironmentReport | undefined;
 let connectionMonitor: ConnectionMonitor;
 let appiumServer: AppiumServerController;
 let deviceReport: DeviceReport | undefined;
+let sessionReport: SessionReport | undefined;
 let displayLanguage = 'ja';
 type InspectorRelay = Awaited<ReturnType<typeof startInspectorProxy>>;
 interface InspectorPanelState {
@@ -190,6 +192,7 @@ function handlePassiveMessage(message: LauncherMessage): boolean {
   if (environmentReport)
     post({ type: 'environment', report: environmentReport });
   if (deviceReport) post({ type: 'devices', report: deviceReport });
+  if (sessionReport) post({ type: 'sessions', report: sessionReport });
   post({ type: 'loading', active: busy });
   return true;
 }
@@ -198,6 +201,10 @@ async function dispatchMessage(message: LauncherMessage): Promise<void> {
   switch (message.type) {
     case 'listDevices':
       return loadDevices();
+    case 'listSessions':
+      return loadSessions(message.serverUrl);
+    case 'attachSession':
+      return attachSession(message);
     case 'deviceCapabilities':
     case 'copyCapabilities':
       return copyCapabilities(message);
@@ -234,6 +241,34 @@ async function loadDevices(): Promise<void> {
     );
   deviceReport = await listDevices();
   post({ type: 'devices', report: deviceReport });
+}
+
+async function loadSessions(serverUrl: string): Promise<void> {
+  if (!vscode.workspace.isTrusted)
+    throw new Error(
+      t(
+        '起動中セッションの一覧にはセッションIDが含まれます。ワークスペースを信頼してから実行してください。',
+        'Running session lists include session IDs. Trust this workspace before continuing.',
+      ),
+    );
+  sessionReport = await listRunningSessions(serverUrl);
+  officialServer = serverUrl;
+  post({ type: 'sessions', report: sessionReport });
+}
+
+async function attachSession(
+  message: Extract<LauncherMessage, { type: 'attachSession' }>,
+): Promise<void> {
+  if (!vscode.workspace.isTrusted)
+    throw new Error(
+      t(
+        '既存セッションへの接続にはワークスペースを信頼してください。',
+        'Trust this workspace before attaching to an existing session.',
+      ),
+    );
+  await vscode.env.clipboard.writeText(message.sessionId);
+  connectionMonitor.watch(message.serverUrl);
+  await openOfficial(message.serverUrl, false, message.sessionId);
 }
 
 async function copyCapabilities(
@@ -436,6 +471,16 @@ function getLoadingLabel(message: LauncherMessage): string | undefined {
         'Android端末・iOSシミュレーターを確認しています…',
         'Checking Android devices and iOS simulators…',
       );
+    case 'listSessions':
+      return t(
+        'Appium Server の起動中セッションを確認しています…',
+        'Checking running Appium sessions…',
+      );
+    case 'attachSession':
+      return t(
+        '既存セッションへ接続しています…',
+        'Attaching to the existing session…',
+      );
     case 'reconnect':
       return t(
         'Appium Server に再接続しています…',
@@ -618,6 +663,7 @@ function activeInspectorPanel():
 async function openOfficial(
   rawUrl: string,
   reuseExisting = false,
+  attachSessionId?: string,
 ): Promise<void> {
   const url = inspectorUrl(rawUrl);
   let response: Response;
@@ -671,6 +717,29 @@ async function openOfficial(
   await settingsWrites;
   const saved = await secrets.get(settingsKey);
   let values = saved ? validateSettings(JSON.parse(saved)) : {};
+  if (attachSessionId) {
+    const server = new URL(normalizedServerUrl);
+    const previous = values.SESSION_SERVER_PARAMS
+      ? (JSON.parse(values.SESSION_SERVER_PARAMS) as Record<string, unknown>)
+      : {};
+    const remote =
+      typeof previous.remote === 'object' && previous.remote !== null
+        ? (previous.remote as Record<string, unknown>)
+        : {};
+    values = {
+      ...values,
+      SESSION_SERVER_PARAMS: JSON.stringify({
+        ...previous,
+        remote: {
+          ...remote,
+          hostname: server.hostname,
+          port: server.port || '80',
+          path: server.pathname || '/',
+        },
+      }),
+      SESSION_SERVER_TYPE: JSON.stringify('remote'),
+    };
+  }
   const relay = await startInspectorProxy(
     url,
     adapter,
@@ -710,13 +779,45 @@ async function openOfficial(
       values = await handleInspectorSettings(message, settingsKey, values);
       return;
     }
+    if (message.type === 'attachResult') {
+      postAttachResult(message.text);
+      return;
+    }
     if (!panel.active) return;
     await handleInspectorClipboard(message, panel, relay);
   });
-  panel.webview.html = officialHtml(relay.url, relay.token, displayLanguage);
+  panel.webview.html = officialHtml(
+    relay.url,
+    relay.token,
+    displayLanguage,
+    attachSessionId,
+  );
   panel.onDidDispose(() => {
     relay.close();
     inspectorPanels.delete(panel);
+  });
+}
+
+function postAttachResult(result: unknown): void {
+  const message =
+    result === 'attached'
+      ? t(
+          '既存セッションへ接続しています。公式 Inspector の表示を確認してください。',
+          'Attaching to the existing session. Check the official Inspector.',
+        )
+      : result === 'prepared'
+        ? t(
+            'Attach タブにセッションIDを入力しました。Attach を押して接続してください。',
+            'The session ID is entered in the Attach tab. Select Attach to connect.',
+          )
+        : t(
+            'セッションIDをクリップボードにコピーしました。公式 Inspector の Attach to Session タブへ貼り付けて Attach を押してください。',
+            'The session ID was copied to the clipboard. Paste it into Attach to Session in the official Inspector, then select Attach.',
+          );
+  post({
+    type: 'notice',
+    level: result === 'manual' ? 'warning' : 'success',
+    text: message,
   });
 }
 

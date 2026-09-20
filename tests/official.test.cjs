@@ -41,6 +41,17 @@ test('official iframe isolates origin and gates clipboard messages', () => {
   assert.match(launcher, /Initial Setup/);
   assert.match(launcher, /install/);
 });
+test('attach requests are sent only after the Inspector iframe loads', () => {
+  const html = officialHtml(
+    inspectorUrl('http://localhost:4723'),
+    'bridge-token',
+    'en',
+    'session-id',
+  );
+  assert.match(html, /attachSessionId="session-id"/);
+  assert.match(html, /type:'prepareAttach'/);
+  assert.match(html, /frame\.addEventListener\('load'/);
+});
 test('webviews follow the VS Code display language', () => {
   assert.equal(webviewText('en').connected, 'Connected');
   assert.equal(webviewText('ja').connected, '接続中');

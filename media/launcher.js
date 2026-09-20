@@ -4,6 +4,8 @@ const protocol = new Set(window.appiumInspectorBridgeProtocol || []);
 const text = window.appiumInspectorBridgeText || {
   selectDevice: 'Select a device',
   noDevices: 'No selectable devices found',
+  noSessions: 'No running sessions found',
+  attach: 'Attach',
   checking: 'Checking',
   connected: 'Connected',
   disconnected: 'Disconnected',
@@ -38,6 +40,7 @@ $('stop').onclick = () => send('stopServer');
 $('logs').onclick = () => send('showOutput');
 $('check-environment').onclick = () => send('checkEnvironment');
 $('list-devices').onclick = () => send('listDevices');
+$('list-sessions').onclick = () => send('listSessions');
 $('device-select').onchange = () => {
   $('device-caps').value = '';
   $('copy-caps').disabled = true;
@@ -70,6 +73,37 @@ function showDevices(data) {
 function showCapabilities(data) {
   $('device-caps').value = data.text;
   $('copy-caps').disabled = false;
+}
+
+function showSessions(data) {
+  const list = $('session-list');
+  list.replaceChildren();
+  if (!data.report.sessions.length) {
+    const empty = document.createElement('p');
+    empty.textContent = text.noSessions;
+    list.append(empty);
+    return;
+  }
+  for (const session of data.report.sessions) {
+    const card = document.createElement('section');
+    const title = document.createElement('strong');
+    title.textContent =
+      session.deviceName || session.platformName || session.id;
+    const details = document.createElement('p');
+    details.textContent = [
+      session.platformName,
+      session.automationName,
+      session.id,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const attach = document.createElement('button');
+    attach.type = 'button';
+    attach.textContent = text.attach;
+    attach.onclick = () => send('attachSession', { sessionId: session.id });
+    card.append(title, details, attach);
+    list.append(card);
+  }
 }
 
 function showConnection(data) {
@@ -143,6 +177,7 @@ function showNotice(data) {
 
 const messageHandlers = {
   devices: showDevices,
+  sessions: showSessions,
   capabilitiesTemplate: showCapabilities,
   connection: showConnection,
   environment: showEnvironment,

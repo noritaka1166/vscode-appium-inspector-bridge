@@ -104,6 +104,7 @@ export class AppiumServerController {
       '--port',
       port,
       '--use-plugins=inspector',
+      '--allow-insecure=*:session_discovery',
       ...(basePath && basePath !== '/' ? ['--base-path', basePath] : []),
     ];
     this.output.appendLine(

@@ -8,6 +8,8 @@ export const launcherMessageTypes = [
   'deviceCapabilities',
   'copyCapabilities',
   'listDevices',
+  'listSessions',
+  'attachSession',
   'startOfficial',
   'openOfficial',
   'watchServer',
@@ -24,18 +26,27 @@ export const launcherMessageTypes = [
 type LauncherMessageType = (typeof launcherMessageTypes)[number];
 type ServerMessageType = Extract<
   LauncherMessageType,
-  'startOfficial' | 'openOfficial' | 'watchServer' | 'reconnect'
+  | 'startOfficial'
+  | 'openOfficial'
+  | 'watchServer'
+  | 'reconnect'
+  | 'listSessions'
 >;
 type DeviceMessageType = Extract<
   LauncherMessageType,
   'deviceCapabilities' | 'copyCapabilities'
 >;
+type AttachMessageType = Extract<LauncherMessageType, 'attachSession'>;
 
 export type LauncherMessage =
   | { type: DeviceMessageType; deviceId: string }
+  | { type: AttachMessageType; serverUrl: string; sessionId: string }
   | { type: ServerMessageType; serverUrl: string }
   | {
-      type: Exclude<LauncherMessageType, DeviceMessageType | ServerMessageType>;
+      type: Exclude<
+        LauncherMessageType,
+        DeviceMessageType | ServerMessageType | AttachMessageType
+      >;
     };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -43,7 +54,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const nonEmptyString = (
   value: Record<string, unknown>,
-  key: 'deviceId' | 'serverUrl',
+  key: 'deviceId' | 'serverUrl' | 'sessionId',
 ): string | undefined => {
   const candidate = value[key];
   return typeof candidate === 'string' && candidate.trim().length > 0
@@ -68,6 +79,13 @@ export function parseLauncherMessage(
     case 'reconnect': {
       const serverUrl = nonEmptyString(value, 'serverUrl');
       return serverUrl ? { type: value.type, serverUrl } : undefined;
+    }
+    case 'attachSession': {
+      const serverUrl = nonEmptyString(value, 'serverUrl');
+      const sessionId = nonEmptyString(value, 'sessionId');
+      return serverUrl && sessionId
+        ? { type: value.type, serverUrl, sessionId }
+        : undefined;
     }
     case 'installOfficial':
     case 'installAppium':
