@@ -53,7 +53,8 @@
         {
           "type": "webview",
           "id": "appiumInspectorBridge.sidebar",
-          "name": "%view.inspector.name%"
+          "name": "%view.inspector.name%",
+          "icon": "media/icon.svg"
         }
       ]
     },
