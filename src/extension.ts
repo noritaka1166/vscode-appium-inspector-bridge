@@ -318,8 +318,8 @@ async function reconnect(serverUrl: string): Promise<void> {
     type: 'notice',
     level: 'success',
     text: t(
-      'サーバーへの接続を確認しました。セッションは自動復元しません。画面の再読込が必要な場合はInspector上部の「再読込」を使用してください。',
-      'Server connection verified. Sessions are not restored automatically; use Reload in the Inspector if needed.',
+      'サーバーへの接続を確認しました。セッションは自動復元しません。',
+      'Server connection verified. Sessions are not restored automatically.',
     ),
   });
 }
@@ -546,45 +546,6 @@ async function inspectEnvironment(): Promise<EnvironmentReport> {
   return environmentReport;
 }
 
-async function handleInspectorReload(
-  panel: vscode.WebviewPanel,
-  relay: Awaited<ReturnType<typeof startInspectorProxy>>,
-  state: { pending: boolean },
-): Promise<void> {
-  if (!panel.active || state.pending) return;
-  state.pending = true;
-  try {
-    const reload = t('再読み込みする', 'Reload');
-    const choice = await vscode.window.showWarningMessage(
-      t('Inspector を再読み込みしますか？', 'Reload Inspector?'),
-      {
-        modal: true,
-        detail: t(
-          '未保存の Capabilities・操作状態が失われ、操作中のセッションとの接続が切れる可能性があります。再読込ではサーバー側のセッションは終了しません。必要な設定を保存し、公式UIでセッションを終了してから続行してください。',
-          'Unsaved capabilities and in-progress state may be lost. Reloading does not end the server-side session. Save settings and end the session in the official UI before continuing.',
-        ),
-      },
-      reload,
-    );
-    if (choice !== reload || !inspectorPanels.has(panel)) return;
-    await settingsWrites;
-    if (inspectorPanels.has(panel))
-      await panel.webview.postMessage({
-        bridge: relay.token,
-        type: 'reloadConfirmed',
-      });
-  } catch {
-    void vscode.window.showErrorMessage(
-      t(
-        'Inspector を再読み込みできませんでした。',
-        'Could not reload Inspector.',
-      ),
-    );
-  } finally {
-    state.pending = false;
-  }
-}
-
 async function handleInspectorSettings(
   message: InspectorMessage,
   settingsKey: string,
@@ -769,13 +730,8 @@ async function openOfficial(
     },
   );
   inspectorPanels.set(panel, { relay, serverUrl: normalizedServerUrl });
-  const reloadState = { pending: false };
   panel.webview.onDidReceiveMessage(async (message: InspectorMessage) => {
     if (message?.bridge !== relay.token) return;
-    if (message.type === 'requestReload') {
-      await handleInspectorReload(panel, relay, reloadState);
-      return;
-    }
     if (message.type === 'saveSettings') {
       values = await handleInspectorSettings(message, settingsKey, values);
       return;

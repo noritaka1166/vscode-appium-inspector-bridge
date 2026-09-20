@@ -125,24 +125,8 @@ export function officialHtml(
 ): string {
   const nonce = randomUUID(),
     ja = japanese(language),
-    origin = escapeHtml(url.origin),
-    href = escapeHtml(url.href);
-  const labels = ja
-    ? {
-        all: '全選択',
-        copy: 'コピー',
-        paste: '貼り付け',
-        reload: '再読込',
-        title: '公式 Appium Inspector',
-      }
-    : {
-        all: 'Select All',
-        copy: 'Copy',
-        paste: 'Paste',
-        reload: 'Reload',
-        title: 'Official Appium Inspector',
-      };
-  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">html,body{margin:0;height:100%;overflow:hidden;background:var(--vscode-editor-background);color:var(--vscode-foreground);font:12px var(--vscode-font-family)}body{display:grid;grid-template-rows:30px 1fr}header{display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--vscode-panel-border)}span{opacity:.7}iframe{border:0;width:100%;height:100%;background:white}button{margin-left:auto;border:0;background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer}</style></head><body><header>Appium Inspector <span>${href}</span><button id="select-all">${labels.all}</button><button id="copy">${labels.copy}</button><button id="paste">${labels.paste}</button><button id="reload">${labels.reload}</button></header><iframe id="inspector" title="${labels.title}" src="${href}" allow="clipboard-read; clipboard-write; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe><script nonce="${nonce}">const vscode=acquireVsCodeApi(),token=${JSON.stringify(bridgeToken)},frame=document.getElementById('inspector'),origin=${JSON.stringify(url.origin)},attachSessionId=${JSON.stringify(attachSessionId ?? '')};const send=type=>vscode.postMessage({type,bridge:token});document.getElementById('paste').onclick=()=>send('paste');document.getElementById('select-all').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'selectAll'},origin);document.getElementById('copy').onclick=()=>frame.contentWindow.postMessage({bridge:token,type:'copy'},origin);document.getElementById('reload').onclick=()=>send('requestReload');if(attachSessionId)frame.addEventListener('load',()=>frame.contentWindow.postMessage({bridge:token,type:'prepareAttach',sessionId:attachSessionId},origin));window.addEventListener('message',event=>{const m=event.data;if(!m||m.bridge!==token)return;if(event.source!==frame.contentWindow&&m.type==='reloadConfirmed'){frame.src=frame.src;return;}if(event.source===frame.contentWindow&&event.origin===origin){if(['paste','copyText','error','saveSettings','attachResult'].includes(m.type))vscode.postMessage(m);}else if(event.source!==frame.contentWindow&&['pasteText','copy','copyResult'].includes(m.type)){frame.contentWindow.postMessage(m,origin);}});</script></body></html>`;
+    origin = escapeHtml(url.origin);
+  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">html,body{margin:0!important;padding:0!important;width:100%;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{display:block;margin:0;border:0;width:100%;height:100%;background:white}</style></head><body><iframe id="inspector" title="Appium Inspector" src="${escapeHtml(url.href)}" allow="clipboard-read; clipboard-write; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe><script nonce="${nonce}">const vscode=acquireVsCodeApi(),token=${JSON.stringify(bridgeToken)},frame=document.getElementById('inspector'),origin=${JSON.stringify(url.origin)},attachSessionId=${JSON.stringify(attachSessionId ?? '')};if(attachSessionId)frame.addEventListener('load',()=>frame.contentWindow.postMessage({bridge:token,type:'prepareAttach',sessionId:attachSessionId},origin));window.addEventListener('message',event=>{const m=event.data;if(!m||m.bridge!==token)return;if(event.source===frame.contentWindow&&event.origin===origin){if(['paste','copyText','error','saveSettings','attachResult'].includes(m.type))vscode.postMessage(m);}else if(event.source!==frame.contentWindow&&['pasteText','copy','copyResult'].includes(m.type)){frame.contentWindow.postMessage(m,origin);}});</script></body></html>`;
 }
 
 export function launcherHtml(

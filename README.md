@@ -56,6 +56,6 @@ Android uses `adb devices -l`; configure `PATH`, `ANDROID_HOME`, or `ANDROID_SDK
 
 The official Inspector's saved capability sets, preferences, saved gestures, and server details are saved per Server URL in VS Code SecretStorage. Save capability sets with **Save As** in the official UI, then select them from **Saved Capability Sets** later. Unsaved edits and active sessions are not restored.
 
-Stopping a server or reloading Inspector requires confirmation. Reloading does not end the server-side session; save what you need and end the session in the official UI first. The connection monitor only checks server reachability and does not guarantee device or session health.
+Stopping a server requires confirmation. The connection monitor only checks server reachability and does not guarantee device or session health.
 
 The extension does not bundle Appium Inspector. Its available features follow the installed official plugin version. This is not an Appium team product. The official plugin is Apache-2.0; this extension is MIT licensed.

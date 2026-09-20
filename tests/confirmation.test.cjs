@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const { EventEmitter } = require('node:events');
-const { officialHtml } = require('../out/official');
 
 function host() {
   let provider,
@@ -149,8 +148,6 @@ function host() {
         serverUrl: 'http://127.0.0.1:4723',
       }),
     stop: () => sidebar.receive({ type: 'stopServer' }),
-    reload: (bridge = 'token') =>
-      panel.webview.receive({ type: 'requestReload', bridge }),
     close: () => dispose(),
   };
 }
@@ -182,10 +179,6 @@ test('reconnect preserves Inspector and session; unreachable server is not start
   await online.reconnect();
   assert.equal(online.html(), html);
   assert.equal(online.kills(), 0);
-  assert.equal(
-    online.events.some((m) => m.type === 'reloadConfirmed'),
-    false,
-  );
   assert.ok(
     online.events.some(
       (m) => m.type === 'notice' && m.text.includes('接続を確認'),
@@ -204,76 +197,4 @@ test('opening an Inspector again creates an independent editor tab', async () =>
   assert.equal(h.panels().length, 2);
   assert.notEqual(h.panels()[1].webview, first.webview);
   assert.match(h.panels()[1].title, /Appium Inspector Bridge/);
-});
-test('reload requires approval, rejects foreign token, and ignores duplicate requests', async () => {
-  const h = host();
-  await h.start();
-  await h.reload('foreign');
-  assert.equal(h.dialogs.length, 0);
-  await h.reload();
-  assert.equal(
-    h.events.some((m) => m.type === 'reloadConfirmed'),
-    false,
-  );
-  let resolve;
-  h.choose(
-    () =>
-      new Promise((r) => {
-        resolve = r;
-      }),
-  );
-  const pending = h.reload();
-  await h.reload();
-  assert.equal(h.dialogs.length, 2);
-  resolve('再読み込みする');
-  await pending;
-  assert.equal(h.events.filter((m) => m.type === 'reloadConfirmed').length, 1);
-  const closing = h.reload();
-  h.close();
-  resolve('再読み込みする');
-  await closing;
-  assert.equal(h.events.filter((m) => m.type === 'reloadConfirmed').length, 1);
-});
-test('reload button sends request; only host acknowledgement reloads iframe', () => {
-  const html = officialHtml(
-    new URL('http://127.0.0.1:5000/inspector'),
-    'token',
-  );
-  const elements = {},
-    sent = [];
-  let listener,
-    reloads = 0;
-  const frame = {
-    contentWindow: {},
-    get src() {
-      return 'url';
-    },
-    set src(_v) {
-      reloads++;
-    },
-  };
-  elements.inspector = frame;
-  vm.runInNewContext(
-    html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1],
-    {
-      acquireVsCodeApi: () => ({ postMessage: (m) => sent.push(m) }),
-      document: { getElementById: (id) => (elements[id] ||= {}) },
-      window: {
-        addEventListener: (_, cb) => {
-          listener = cb;
-        },
-      },
-    },
-  );
-  elements.reload.onclick();
-  assert.equal(sent[0].type, 'requestReload');
-  assert.equal(reloads, 0);
-  listener({
-    source: frame.contentWindow,
-    origin: 'http://127.0.0.1:5000',
-    data: { bridge: 'token', type: 'reloadConfirmed' },
-  });
-  assert.equal(reloads, 0);
-  listener({ source: {}, data: { bridge: 'token', type: 'reloadConfirmed' } });
-  assert.equal(reloads, 1);
 });

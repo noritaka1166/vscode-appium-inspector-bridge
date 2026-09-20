@@ -37,6 +37,7 @@ test('official iframe isolates origin and gates clipboard messages', () => {
   assert.doesNotMatch(html, /allow-top-navigation/);
   assert.match(html, /event.origin===origin/);
   assert.match(html, /m.bridge!==token/);
+  assert.doesNotMatch(html, /select-all|id="copy"|id="paste"|id="reload"/);
   const launcher = launcherHtml('launcher.js', 'launcher.css', 'test:');
   assert.match(launcher, /Initial Setup/);
   assert.match(launcher, /install/);
@@ -63,13 +64,5 @@ test('webviews follow the VS Code display language', () => {
   assert.match(
     launcherHtml('launcher.js', 'launcher.css', 'test:', 'ja'),
     /起動して新しい Inspector タブを開く/,
-  );
-  assert.match(
-    officialHtml(inspectorUrl('http://localhost:4723'), '', 'en'),
-    />Reload</,
-  );
-  assert.match(
-    officialHtml(inspectorUrl('http://localhost:4723'), '', 'ja'),
-    />再読込</,
   );
 });

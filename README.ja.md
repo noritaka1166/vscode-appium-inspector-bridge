@@ -54,6 +54,6 @@ Androidは `adb devices -l`、iOSシミュレーターはmacOSの `xcrun simctl`
 
 公式Inspectorの **Save As** で保存したCapability Sets、設定、保存済みジェスチャーは、Server URLごとにVS Code SecretStorageへ保存されます。未保存の編集内容や実行中セッションは復元されません。
 
-Server停止とInspector再読込は確認ダイアログを表示します。再読込ではサーバー側のセッションは終了しないため、必要な設定を保存し、公式UIでセッションを終了してから操作してください。
+Server停止時には確認ダイアログを表示します。
 
 本拡張はAppiumチームの公式製品ではありません。公式プラグインはApache-2.0、本拡張はMITライセンスです。

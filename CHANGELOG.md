@@ -40,4 +40,4 @@ Initial public release.
 - Server URL単位で承認済みInspector設定をVS Code SecretStorageへ保存
 - Selected Elementを含む、VS Codeと埋め込みInspector間のコピー・貼り付け連携
 - VS Codeの表示言語に応じた日本語・英語対応
-- 管理中Serverの停止およびInspector再読込前の確認
+- 管理中Serverの停止前の確認
