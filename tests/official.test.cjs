@@ -35,8 +35,8 @@ test('official iframe isolates origin and gates clipboard messages', () => {
   assert.match(html, /src="http:\/\/localhost:4723\/inspector"/);
   assert.match(html, /allow-downloads/);
   assert.doesNotMatch(html, /allow-top-navigation/);
-  assert.match(html, /event.origin===origin/);
-  assert.match(html, /m.bridge!==token/);
+  assert.match(html, /event\.origin === origin/);
+  assert.match(html, /message\.bridge !== token/);
   assert.doesNotMatch(html, /select-all|id="copy"|id="paste"|id="reload"/);
   const launcher = launcherHtml('launcher.js', 'launcher.css', 'test:');
   assert.match(launcher, /Initial Setup/);
@@ -49,9 +49,17 @@ test('attach requests are sent only after the Inspector iframe loads', () => {
     'en',
     'session-id',
   );
-  assert.match(html, /attachSessionId="session-id"/);
-  assert.match(html, /type:'prepareAttach'/);
+  assert.match(html, /attachSessionId = "session-id"/);
+  assert.match(html, /type: 'prepareAttach'/);
   assert.match(html, /frame\.addEventListener\('load'/);
+});
+test('Inspector bridge serializes untrusted values safely for its inline script', () => {
+  const html = officialHtml(
+    inspectorUrl('http://localhost:4723'),
+    '</script><script>unsafe()</script>',
+  );
+  assert.doesNotMatch(html, /token = "<\/script>/);
+  assert.match(html, /token = "\\u003c\/script>/);
 });
 test('webviews follow the VS Code display language', () => {
   assert.equal(webviewText('en').connected, 'Connected');

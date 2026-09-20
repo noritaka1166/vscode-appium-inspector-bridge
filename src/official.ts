@@ -117,16 +117,118 @@ const htmlEntities: Record<string, string> = {
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => htmlEntities[char] ?? char);
 
+const serializeForScript = (value: unknown): string =>
+  JSON.stringify(value).replaceAll('<', String.raw`\u003c`);
+
+const inspectorFrameStyle = `
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    background: var(--vscode-editor-background);
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    background: white;
+  }
+`;
+
+const messagesFromInspector = [
+  'paste',
+  'copyText',
+  'error',
+  'saveSettings',
+  'attachResult',
+];
+
+const messagesFromVsCode = ['pasteText', 'copy', 'copyResult'];
+
+function inspectorBridgeScript(
+  bridgeToken: string,
+  origin: string,
+  attachSessionId: string | undefined,
+): string {
+  return `
+    const vscode = acquireVsCodeApi();
+    const token = ${serializeForScript(bridgeToken)};
+    const frame = document.getElementById('inspector');
+    const origin = ${serializeForScript(origin)};
+    const attachSessionId = ${serializeForScript(attachSessionId ?? '')};
+    const messagesFromInspector = new Set(${serializeForScript(messagesFromInspector)});
+    const messagesFromVsCode = new Set(${serializeForScript(messagesFromVsCode)});
+
+    if (attachSessionId) {
+      frame.addEventListener('load', () => {
+        frame.contentWindow.postMessage(
+          { bridge: token, type: 'prepareAttach', sessionId: attachSessionId },
+          origin,
+        );
+      });
+    }
+
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (!message || message.bridge !== token) return;
+
+      if (event.source === frame.contentWindow && event.origin === origin) {
+        if (messagesFromInspector.has(message.type)) vscode.postMessage(message);
+        return;
+      }
+      if (event.source !== frame.contentWindow && messagesFromVsCode.has(message.type)) {
+        frame.contentWindow.postMessage(message, origin);
+      }
+    });
+  `;
+}
+
+function inspectorCsp(origin: string, nonce: string): string {
+  return [
+    "default-src 'none'",
+    `frame-src ${origin}`,
+    `style-src 'nonce-${nonce}'`,
+    `script-src 'nonce-${nonce}'`,
+  ].join('; ');
+}
+
 export function officialHtml(
   url: URL,
   bridgeToken = '',
   language?: string,
   attachSessionId?: string,
 ): string {
-  const nonce = randomUUID(),
-    ja = japanese(language),
-    origin = escapeHtml(url.origin);
-  return `<!doctype html><html lang="${ja ? 'ja' : 'en'}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">html,body{margin:0!important;padding:0!important;width:100%;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{display:block;margin:0;border:0;width:100%;height:100%;background:white}</style></head><body><iframe id="inspector" title="Appium Inspector" src="${escapeHtml(url.href)}" allow="clipboard-read; clipboard-write; fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe><script nonce="${nonce}">const vscode=acquireVsCodeApi(),token=${JSON.stringify(bridgeToken)},frame=document.getElementById('inspector'),origin=${JSON.stringify(url.origin)},attachSessionId=${JSON.stringify(attachSessionId ?? '')};if(attachSessionId)frame.addEventListener('load',()=>frame.contentWindow.postMessage({bridge:token,type:'prepareAttach',sessionId:attachSessionId},origin));window.addEventListener('message',event=>{const m=event.data;if(!m||m.bridge!==token)return;if(event.source===frame.contentWindow&&event.origin===origin){if(['paste','copyText','error','saveSettings','attachResult'].includes(m.type))vscode.postMessage(m);}else if(event.source!==frame.contentWindow&&['pasteText','copy','copyResult'].includes(m.type)){frame.contentWindow.postMessage(m,origin);}});</script></body></html>`;
+  const nonce = randomUUID();
+  const origin = escapeHtml(url.origin);
+  const documentLanguage = japanese(language) ? 'ja' : 'en';
+  const csp = inspectorCsp(origin, nonce);
+  const bridge = inspectorBridgeScript(
+    bridgeToken,
+    url.origin,
+    attachSessionId,
+  );
+  return `<!doctype html>
+<html lang="${documentLanguage}">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
+    <style nonce="${nonce}">${inspectorFrameStyle}</style>
+  </head>
+  <body>
+    <iframe
+      id="inspector"
+      title="Appium Inspector"
+      src="${escapeHtml(url.href)}"
+      allow="clipboard-read; clipboard-write; fullscreen"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"
+    ></iframe>
+    <script nonce="${nonce}">${bridge}</script>
+  </body>
+</html>`;
 }
 
 export function launcherHtml(
