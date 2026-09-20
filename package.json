@@ -1,5 +1,5 @@
 {
-  "name": "appium-inspector-lite",
+  "name": "appium-inspector-bridge",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "0.3.9",
@@ -7,12 +7,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/noritaka1166/vscode-appium-inspector-lite.git"
+    "url": "https://github.com/noritaka1166/vscode-appium-inspector-bridge.git"
   },
   "bugs": {
-    "url": "https://github.com/noritaka1166/vscode-appium-inspector-lite/issues"
+    "url": "https://github.com/noritaka1166/vscode-appium-inspector-bridge/issues"
   },
-  "homepage": "https://github.com/noritaka1166/vscode-appium-inspector-lite#readme",
+  "homepage": "https://github.com/noritaka1166/vscode-appium-inspector-bridge#readme",
   "engines": {
     "vscode": "^1.96.0"
   },

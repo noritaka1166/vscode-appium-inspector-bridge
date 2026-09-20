@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are provided for the latest released version of Appium Inspector Lite. Older releases should be upgraded before reporting an issue whenever possible.
+Security fixes are provided for the latest released version of Appium Inspector Bridge. Older releases should be upgraded before reporting an issue whenever possible.
 
 | Version | Supported |
 | --- | --- |
@@ -26,7 +26,7 @@ Reports will be acknowledged as soon as reasonably possible. After validation, a
 
 ## System and Scope
 
-Appium Inspector Lite is a desktop VS Code extension that embeds the official Appium Inspector web UI and communicates only with local Appium servers. This policy covers the extension source, its loopback relay, Webview bridges, local device discovery, and Inspector settings stored by the extension.
+Appium Inspector Bridge is a desktop VS Code extension that embeds the official Appium Inspector web UI and communicates only with local Appium servers. This policy covers the extension source, its loopback relay, Webview bridges, local device discovery, and Inspector settings stored by the extension.
 
 The following components are outside this repository's security boundary and should be reported to their respective maintainers:
 

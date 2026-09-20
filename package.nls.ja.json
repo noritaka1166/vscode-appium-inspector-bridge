@@ -1,6 +1,6 @@
 {
-  "extension.displayName": "Appium Inspector Lite",
-  "extension.description": "VS Code を離れずに公式 Appium Inspector の Web UI を利用します。",
+  "extension.displayName": "Appium Inspector Bridge",
+  "extension.description": "公式 Appium Inspector の Web UI を VS Code へ統合する非公式拡張です。",
   "viewsContainer.title": "Appium Inspector",
   "view.inspector.name": "インスペクター",
   "command.paste.title": "Appium Inspector: 貼り付け",

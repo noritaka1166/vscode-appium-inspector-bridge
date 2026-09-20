@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
   secrets = context.secrets;
   connectionMonitor = new ConnectionMonitor(state => post({ type: 'connection', ...state }),
     url => Boolean(serverProcess) && managedServerUrl === url, url => probeServer(url, fetch));
-  output = vscode.window.createOutputChannel('Appium Inspector Lite');
+  output = vscode.window.createOutputChannel('Appium Inspector Bridge');
   context.subscriptions.push(
     connectionMonitor,
     vscode.commands.registerCommand('appiumInspector.paste', async () => {
@@ -424,14 +424,14 @@ async function waitForServer(serverUrl: string, child: ChildProcessWithoutNullSt
   const timeoutAt = Date.now() + 15_000;
   while (Date.now() < timeoutAt) {
     if (serverProcess !== child || child.exitCode !== null) {
-      throw new Error(t('Appium Server が起動直後に停止しました。出力パネルの Appium Inspector Lite ログを確認してください。', 'Appium Server stopped immediately after starting. Check the Appium Inspector Lite output log.'));
+      throw new Error(t('Appium Server が起動直後に停止しました。出力パネルの Appium Inspector Bridge ログを確認してください。', 'Appium Server stopped immediately after starting. Check the Appium Inspector Bridge output log.'));
     }
     if (await isServerReachable(serverUrl)) {
       return;
     }
     await new Promise<void>((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(t('Appium Server の起動がタイムアウトしました。出力パネルの Appium Inspector Lite ログを確認してください。', 'Starting Appium Server timed out. Check the Appium Inspector Lite output log.'));
+  throw new Error(t('Appium Server の起動がタイムアウトしました。出力パネルの Appium Inspector Bridge ログを確認してください。', 'Starting Appium Server timed out. Check the Appium Inspector Bridge output log.'));
 }
 
 function normaliseServerUrl(value: string): string {

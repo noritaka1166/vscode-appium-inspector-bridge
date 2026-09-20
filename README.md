@@ -1,4 +1,4 @@
-# Appium Inspector Lite
+# Appium Inspector Bridge
 
 [日本語版 README](README.ja.md)
 
