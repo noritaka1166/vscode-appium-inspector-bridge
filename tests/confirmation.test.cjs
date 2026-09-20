@@ -29,7 +29,7 @@ function host() {
     fetch: async url => { requests.push(String(url)); return { ok: String(url).endsWith('/status') ? spawned : true, json: async () => ({ value: { ready: true } }), text: async () => 'Appium Inspector' }; },
     require: name => {
       if (name === 'vscode') return vscode;
-      if (name === './environment') return { checkEnvironment: async () => ({ canStart: true, items: [] }) };
+      if (name === './environment') return { checkEnvironment: async () => ({ canStart: true, items: [] }), resolveAppiumExecutable: async () => '/trusted/appium' };
       if (name === 'node:child_process') return { spawn: () => { spawned = true; return child; } };
       if (name === 'node:fs/promises') return { readFile: async () => '' };
       if (name === './inspector-proxy') return { startInspectorProxy: async () => ({ url: new URL('http://127.0.0.1:5000/inspector'), token: 'token', close() {} }) };

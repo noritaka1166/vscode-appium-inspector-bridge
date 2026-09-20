@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { realpath, stat } from 'node:fs/promises';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { platform as nodePlatform } from 'node:process';
 import { t } from './i18n';
 
@@ -11,20 +13,51 @@ interface CheckItem {
 export interface EnvironmentReport { items: CheckItem[]; canStart: boolean }
 export type AppiumRunner = (args: string[]) => Promise<string>;
 
-const runAppium: AppiumRunner = args => new Promise((resolve, reject) => {
-  // Use the inherited environment, exactly as the server launcher does. Filtering
-  // writable PATH entries would hide standard nvm/Homebrew Appium installations.
-  execFile('appium', args, { timeout: 15_000, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
-    if (error) {
-      const code = (error as { code?: string }).code;
-      let detail: string;
-      if (code === 'ENOENT') detail = t('appium コマンドが見つかりません。', 'appium command was not found.');
-      else if (error.killed) detail = t('確認が15秒でタイムアウトしました。', 'Check timed out after 15 seconds.');
-      else detail = t(`コマンドの実行に失敗しました: ${String(stderr || error.message).slice(0, 1500)}`, `Command failed: ${String(stderr || error.message).slice(0, 1500)}`);
-      reject(new Error(detail));
-    } else resolve(stdout.trim());
+function commandNotFound(): Error & { code: string } {
+  const error = new Error('appium command was not found.') as Error & { code: string };
+  error.code = 'ENOENT';
+  return error;
+}
+
+async function trustedExecutable(candidate: string, uid: number | undefined): Promise<string | undefined> {
+  let executable: string;
+  try { executable = await realpath(candidate); } catch { return undefined; }
+  const file = await stat(executable);
+  if (!file.isFile() || (file.mode & 0o022) !== 0 || (uid !== undefined && file.uid !== 0 && file.uid !== uid)) return undefined;
+  for (let directory = dirname(executable);;) {
+    const entry = await stat(directory);
+    if (!entry.isDirectory() || (entry.mode & 0o022) !== 0 || (uid !== undefined && entry.uid !== 0 && entry.uid !== uid)) return undefined;
+    const parent = dirname(directory);
+    if (parent === directory) return executable;
+    directory = parent;
+  }
+}
+
+/** Resolve a verified absolute Appium executable instead of passing a bare command to PATH lookup. */
+export async function resolveAppiumExecutable(pathValue = process.env.PATH ?? '', uid = process.getuid?.()): Promise<string> {
+  for (const directory of pathValue.split(delimiter)) {
+    if (!isAbsolute(directory)) continue;
+    const executable = await trustedExecutable(join(directory, 'appium'), uid);
+    if (executable) return executable;
+  }
+  throw commandNotFound();
+}
+
+const runAppium: AppiumRunner = async args => {
+  const executable = await resolveAppiumExecutable();
+  return new Promise((resolve, reject) => {
+    execFile(executable, args, { timeout: 15_000, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (error) {
+        const code = (error as { code?: string }).code;
+        let detail: string;
+        if (code === 'ENOENT') detail = t('appium コマンドが見つかりません。', 'appium command was not found.');
+        else if (error.killed) detail = t('確認が15秒でタイムアウトしました。', 'Check timed out after 15 seconds.');
+        else detail = t(`コマンドの実行に失敗しました: ${String(stderr || error.message).slice(0, 1500)}`, `Command failed: ${String(stderr || error.message).slice(0, 1500)}`);
+        reject(new Error(detail));
+      } else resolve(stdout.trim());
+    });
   });
-});
+};
 
 function installed(output: string): Record<string, { version: string; installed: boolean }> {
   const value: unknown = JSON.parse(output);

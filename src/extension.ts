@@ -4,7 +4,7 @@ import { inspectorUrl, officialHtml, launcherHtml } from './official';
 import { startInspectorProxy } from './inspector-proxy';
 import { readFile } from 'node:fs/promises';
 import { settingKeys, validateSettings } from './settings';
-import { checkEnvironment, EnvironmentReport } from './environment';
+import { checkEnvironment, EnvironmentReport, resolveAppiumExecutable } from './environment';
 import { ConnectionMonitor, probeServer, serverKey } from './connection';
 import { listDevices, capabilitiesFor, DeviceReport } from './devices';
 import { setLanguage, t } from './i18n';
@@ -303,8 +303,9 @@ async function openOfficial(rawUrl: string): Promise<void> {
 async function installOfficialPlugin(): Promise<void> {
   if (!vscode.workspace.isTrusted) { throw new Error(t('このワークスペースを信頼してから実行してください。', 'Trust this workspace before running this command.')); }
   output.show(true);
+  const appium = await appiumExecutable();
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('appium', ['plugin', 'install', 'inspector'], { shell: false });
+    const child = spawn(appium, ['plugin', 'install', 'inspector'], { shell: false });
     child.stdout.on('data', data => output.append(data.toString()));
     child.stderr.on('data', data => output.append(data.toString()));
     child.once('error', (error) => reject(new Error(t(`Appium を実行できません: ${error.message}`, `Cannot run Appium: ${error.message}`))));
@@ -337,7 +338,7 @@ async function startServer(rawServerUrl: string): Promise<void> {
   ];
 
   output.appendLine(t(`Appium Server を起動します: appium ${args.join(' ')}`, `Starting Appium Server: appium ${args.join(' ')}`));
-  const child = spawn('appium', args, { shell: false });
+  const child = spawn(await appiumExecutable(), args, { shell: false });
   serverProcess = child;
   managedServerUrl = serverKey(serverUrl);
   child.stdout.on('data', data => output.append(data.toString()));
@@ -365,6 +366,11 @@ async function startServer(rawServerUrl: string): Promise<void> {
   await waitForServer(serverUrl, child);
   postServerState();
   post({ type: 'notice', level: 'success', text: t(`Appium Server を起動しました: ${serverUrl}`, `Appium Server started: ${serverUrl}`) });
+}
+
+async function appiumExecutable(): Promise<string> {
+  try { return await resolveAppiumExecutable(); }
+  catch { throw new Error(t('appium コマンドが見つかりません。`npm install -g appium` を実行してから、VS Code を再起動してください。', 'appium command was not found. Run `npm install -g appium`, then restart VS Code.')); }
 }
 
 async function stopServer(): Promise<void> {

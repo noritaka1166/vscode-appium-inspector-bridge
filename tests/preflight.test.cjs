@@ -24,7 +24,7 @@ function setup({ trusted = true, reachable = false, canStart = false } = {}) {
     require: name => {
       if (name === 'vscode') return vscode;
       if (name === './devices') return { ...require('../out/devices'), listDevices: async () => { scans++; return { devices: [{ id: 'Android:test', udid: 'test', name: 'Pixel', platform: 'Android', state: 'device' }], notes: [] }; } };
-      if (name === './environment') return { checkEnvironment: async () => { checks++; return report; } };
+      if (name === './environment') return { checkEnvironment: async () => { checks++; return report; }, resolveAppiumExecutable: async () => '/trusted/appium' };
       if (name === 'node:child_process') return { spawn: () => { spawns++; throw Error('test: stop before real spawn'); } };
       return name.startsWith('./') ? require('../out/' + name.slice(2)) : require(name);
     }
