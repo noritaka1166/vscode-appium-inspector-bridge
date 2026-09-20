@@ -48,13 +48,3 @@ Androidは `adb devices -l`、iOSシミュレーターはmacOSの `xcrun simctl`
 Server停止とInspector再読込は確認ダイアログを表示します。再読込ではサーバー側のセッションは終了しないため、必要な設定を保存し、公式UIでセッションを終了してから操作してください。
 
 本拡張はAppiumチームの公式製品ではありません。公式プラグインはApache-2.0、本拡張はMITライセンスです。
-
-## 開発
-
-```bash
-npm install
-npm run compile
-npm test
-```
-
-このフォルダをVS Codeで開き、`F5` でExtension Development Hostを起動できます。

@@ -50,13 +50,3 @@ The official Inspector's saved capability sets, preferences, saved gestures, and
 Stopping a server or reloading Inspector requires confirmation. Reloading does not end the server-side session; save what you need and end the session in the official UI first. The connection monitor only checks server reachability and does not guarantee device or session health.
 
 The extension does not bundle Appium Inspector. Its available features follow the installed official plugin version. This is not an Appium team product. The official plugin is Apache-2.0; this extension is MIT licensed.
-
-## Development
-
-```bash
-npm install
-npm run compile
-npm test
-```
-
-Open this folder in VS Code and press `F5` to run **Appium Inspector Lite Debug** in an Extension Development Host.
