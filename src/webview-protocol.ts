@@ -13,6 +13,8 @@ export const launcherMessageTypes = [
   'watchServer',
   'reconnect',
   'installOfficial',
+  'installAppium',
+  'showDriverGuide',
   'checkEnvironment',
   'ready',
   'stopServer',
@@ -68,6 +70,8 @@ export function parseLauncherMessage(
       return serverUrl ? { type: value.type, serverUrl } : undefined;
     }
     case 'installOfficial':
+    case 'installAppium':
+    case 'showDriverGuide':
     case 'checkEnvironment':
     case 'listDevices':
     case 'ready':

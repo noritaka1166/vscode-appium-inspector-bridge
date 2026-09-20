@@ -4,11 +4,17 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { platform as nodePlatform } from 'node:process';
 import { t } from './i18n';
 
+export type RemediationAction =
+  | 'installAppium'
+  | 'installOfficial'
+  | 'showDriverGuide';
+
 interface CheckItem {
   name: string;
   status: 'ok' | 'warning' | 'error' | 'skipped';
   detail: string;
   action?: string;
+  remediation?: RemediationAction;
 }
 export interface EnvironmentReport {
   items: CheckItem[];
@@ -57,16 +63,31 @@ async function trustedExecutable(
 }
 
 /** Resolve a verified absolute Appium executable instead of passing a bare command to PATH lookup. */
-export async function resolveAppiumExecutable(
+export async function resolveTrustedCommand(
+  command: string,
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),
 ): Promise<string> {
   for (const directory of pathValue.split(delimiter)) {
     if (!isAbsolute(directory)) continue;
-    const executable = await trustedExecutable(join(directory, 'appium'), uid);
+    const executable = await trustedExecutable(join(directory, command), uid);
     if (executable) return executable;
   }
   throw commandNotFound();
+}
+
+export async function resolveAppiumExecutable(
+  pathValue = process.env.PATH ?? '',
+  uid = process.getuid?.(),
+): Promise<string> {
+  return resolveTrustedCommand('appium', pathValue, uid);
+}
+
+export async function resolveNpmExecutable(
+  pathValue = process.env.PATH ?? '',
+  uid = process.getuid?.(),
+): Promise<string> {
+  return resolveTrustedCommand('npm', pathValue, uid);
 }
 
 const runAppium: AppiumRunner = async (args) => {
@@ -177,6 +198,7 @@ export async function checkEnvironment(
           '既存テストとの互換性を確認してから npm install -g appium@3 を実行してください。',
           'Check compatibility with existing tests, then run `npm install -g appium@3`.',
         ),
+        remediation: 'installAppium',
       });
     } else items.push({ name: 'Appium', status: 'ok', detail: version });
   } catch (error) {
@@ -188,6 +210,7 @@ export async function checkEnvironment(
         'ターミナルで appium --version を確認してください。未導入なら npm install -g appium@3 を実行し、PATH が通った環境から VS Code を再起動してください。',
         'Run `appium --version` in a terminal. If it is not installed, run `npm install -g appium@3`, then restart VS Code from an environment with Appium on PATH.',
       ),
+      remediation: 'installAppium',
     });
     items = [
       ...items,
@@ -235,6 +258,7 @@ export async function checkEnvironment(
                   '「初回セットアップ」→「公式プラグインをインストール」、または appium plugin install inspector を実行してください。',
                   'Select “Install Official Plugin” in Initial Setup, or run `appium plugin install inspector`.',
                 ),
+                remediation: 'installOfficial',
               };
         }
         const drivers = Object.entries(entries).filter(
@@ -259,6 +283,7 @@ export async function checkEnvironment(
                 'Android: appium driver install uiautomator2\niOS（macOS）: appium driver install xcuitest\n対象に合うものをターミナルで導入してください。',
                 'Android: appium driver install uiautomator2\niOS (macOS): appium driver install xcuitest\nInstall the driver that matches your target in a terminal.',
               ),
+              remediation: 'showDriverGuide',
             };
       } catch (error) {
         return {

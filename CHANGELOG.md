@@ -11,6 +11,7 @@ Initial public release.
 - Embed the official Appium Inspector plugin UI in a VS Code editor tab.
 - Install the Inspector plugin and start or stop an extension-managed local Appium Server.
 - Check the local Appium version, Inspector plugin, and installed drivers before starting a server.
+- Offer guided remediation for Appium, the Inspector plugin, and platform drivers from Environment Check.
 - Show server connection state and reconnect without creating a new session.
 - List Android devices and iOS simulators, and generate capability JSON templates.
 - Persist approved Inspector settings per Server URL in VS Code SecretStorage.
@@ -29,6 +30,7 @@ Initial public release.
 - 公式 Appium Inspector プラグインUIのVS Codeエディタータブ内表示
 - Inspectorプラグインの導入と、拡張管理ローカルAppium Serverの起動・停止
 - Appium・Inspectorプラグイン・ドライバーの起動前チェック
+- 環境チェックからのAppium・Inspectorプラグイン・プラットフォームドライバーの対処導線
 - セッションを作り直さない接続状態表示と再接続
 - Android端末・iOSシミュレーター一覧とCapabilities JSONひな形生成
 - Server URL単位で承認済みInspector設定をVS Code SecretStorageへ保存

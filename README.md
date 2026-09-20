@@ -9,6 +9,7 @@ An unofficial VS Code extension that embeds the official Appium Inspector web UI
 - Open the official Appium Inspector plugin inside VS Code.
 - Install the Inspector plugin, start or stop a local Appium Server, and view its logs.
 - Check the local Appium version, Inspector plugin, and installed drivers before starting a server.
+- Offer guided remediation from Environment Check, including Appium installation, Inspector plugin installation, and driver installation commands.
 - Show connection status and reconnect without creating a new session.
 - List Android devices and iOS simulators, then generate a capability JSON template.
 - Persist official Inspector capability sets, connection details, theme, language, and saved gestures in VS Code SecretStorage.

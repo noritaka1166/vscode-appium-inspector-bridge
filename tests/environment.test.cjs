@@ -30,6 +30,7 @@ test('missing Appium stops checks and provides PATH and installation guidance', 
   assert.equal(calls, 1);
   assert.equal(report.canStart, false);
   assert.match(report.items[0].action, /PATH/);
+  assert.equal(report.items[0].remediation, 'installAppium');
   assert.deepEqual(
     report.items.map((x) => x.status),
     ['error', 'skipped', 'skipped'],
@@ -45,10 +46,12 @@ test('missing Inspector blocks launch; missing drivers warn but permit Inspector
     missingPlugin.items[1].action,
     /appium plugin install inspector/,
   );
+  assert.equal(missingPlugin.items[1].remediation, 'installOfficial');
   const noDrivers = await checkEnvironment(runner({ drivers: {} }), 'darwin');
   assert.equal(noDrivers.canStart, true);
   assert.equal(noDrivers.items[2].status, 'warning');
   assert.match(noDrivers.items[2].action, /uiautomator2/);
+  assert.equal(noDrivers.items[2].remediation, 'showDriverGuide');
 });
 test('old or invalid version is rejected', async () => {
   for (const version of ['2.19.0', 'not a version']) {

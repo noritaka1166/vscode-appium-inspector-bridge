@@ -20,4 +20,10 @@ test('launcher protocol accepts only complete known messages', () => {
   assert.equal(parseLauncherMessage({ type: 'unknown' }), undefined);
   assert.equal(parseLauncherMessage(null), undefined);
   assert.ok(launcherMessageTypes.includes('listDevices'));
+  assert.deepEqual(parseLauncherMessage({ type: 'installAppium' }), {
+    type: 'installAppium',
+  });
+  assert.deepEqual(parseLauncherMessage({ type: 'showDriverGuide' }), {
+    type: 'showDriverGuide',
+  });
 });

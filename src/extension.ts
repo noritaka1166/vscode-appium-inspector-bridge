@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { AppiumServerController, normalizeServerUrl } from './appium-server';
@@ -8,6 +8,7 @@ import {
   checkEnvironment,
   type EnvironmentReport,
   resolveAppiumExecutable,
+  resolveNpmExecutable,
 } from './environment';
 import { setLanguage, t } from './i18n';
 import { startInspectorProxy } from './inspector-proxy';
@@ -200,6 +201,10 @@ async function dispatchMessage(message: LauncherMessage): Promise<void> {
       return inspectEnvironment().then(() => undefined);
     case 'installOfficial':
       return installOfficial();
+    case 'installAppium':
+      return installAppium();
+    case 'showDriverGuide':
+      return showDriverGuide();
     case 'startOfficial':
       return startOfficial(message.serverUrl);
     case 'openOfficial':
@@ -297,6 +302,105 @@ async function installOfficial(): Promise<void> {
   });
 }
 
+async function installAppium(): Promise<void> {
+  if (!vscode.workspace.isTrusted)
+    throw new Error(
+      t(
+        'Appium の導入には npm を実行します。このワークスペースを信頼してから実行してください。',
+        'Trust this workspace before installing Appium with npm.',
+      ),
+    );
+  if (appiumServer.isRunning)
+    throw new Error(
+      t(
+        'Appium の更新前に Server を停止してください。',
+        'Stop the server before updating Appium.',
+      ),
+    );
+  const install = t('インストールする', 'Install');
+  const choice = await vscode.window.showWarningMessage(
+    t(
+      'Appium 3 をグローバルにインストールしますか？',
+      'Install Appium 3 globally?',
+    ),
+    {
+      modal: true,
+      detail: t(
+        '`npm install -g appium@3` を実行し、現在のNode.js環境のグローバルパッケージを変更します。既存のAppiumやテストへの影響を確認してから続行してください。',
+        '`npm install -g appium@3` will change global packages in the current Node.js environment. Check the impact on existing Appium installations and tests before continuing.',
+      ),
+    },
+    install,
+  );
+  if (choice !== install) return;
+  output.show(true);
+  output.appendLine(t('Appium 3 を導入します。', 'Installing Appium 3.'));
+  let npm: string;
+  try {
+    npm = await resolveNpmExecutable();
+  } catch {
+    throw new Error(
+      t(
+        'npm コマンドが見つかりません。Node.js 24 を導入し、npm が PATH にある環境から VS Code を再起動してください。',
+        'npm command was not found. Install Node.js 24, then restart VS Code from an environment where npm is on PATH.',
+      ),
+    );
+  }
+  await runCommand(
+    npm,
+    ['install', '-g', 'appium@3'],
+    t(
+      'Appium 3 の導入に失敗しました。出力パネルのログを確認してください。',
+      'Appium 3 installation failed. Check Logs.',
+    ),
+  );
+  await inspectEnvironment();
+  post({
+    type: 'notice',
+    level: 'success',
+    text: t(
+      'Appium 3 を導入しました。環境チェック結果を確認してから起動してください。',
+      'Appium 3 installed. Review Environment Check results before starting.',
+    ),
+  });
+}
+
+async function showDriverGuide(): Promise<void> {
+  const choices = [
+    {
+      label: t('Android（UiAutomator2）', 'Android (UiAutomator2)'),
+      description: 'appium driver install uiautomator2',
+    },
+    ...(process.platform === 'darwin'
+      ? [
+          {
+            label: t('iOS（XCUITest）', 'iOS (XCUITest)'),
+            description: 'appium driver install xcuitest',
+          },
+        ]
+      : []),
+  ];
+  const choice = await vscode.window.showQuickPick(choices, {
+    placeHolder: t(
+      '導入する対象プラットフォームを選択してください',
+      'Choose the target platform to install',
+    ),
+  });
+  if (!choice) return;
+  await vscode.env.clipboard.writeText(choice.description);
+  output.appendLine(
+    `${t('ドライバー導入コマンド', 'Driver installation command')}: ${choice.description}`,
+  );
+  post({
+    type: 'notice',
+    level: 'success',
+    text: t(
+      `コマンドをクリップボードへコピーしました: ${choice.description}`,
+      `Command copied to clipboard: ${choice.description}`,
+    ),
+  });
+}
+
 async function startOfficial(serverUrl: string): Promise<void> {
   inspectorUrl(serverUrl);
   connectionMonitor.watch(serverUrl);
@@ -340,6 +444,13 @@ function getLoadingLabel(message: LauncherMessage): string | undefined {
       return t(
         '公式 Inspector プラグインをインストールしています…',
         'Installing official Inspector plugin…',
+      );
+    case 'installAppium':
+      return t('Appium 3 をインストールしています…', 'Installing Appium 3…');
+    case 'showDriverGuide':
+      return t(
+        'ドライバーの導入方法を準備しています…',
+        'Preparing driver options…',
       );
     case 'startOfficial':
       return t(
@@ -635,6 +746,28 @@ async function installOfficialPlugin(): Promise<void> {
               ),
             ),
           ),
+    );
+  });
+}
+
+async function runCommand(
+  command: string,
+  args: string[],
+  failure: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(command, args, { shell: false });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    child.stdout.on('data', (data) => output.append(data.toString()));
+    child.stderr.on('data', (data) => output.append(data.toString()));
+    child.once('error', (error) => reject(error));
+    child.once('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(failure)),
     );
   });
 }

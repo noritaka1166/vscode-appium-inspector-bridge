@@ -9,6 +9,7 @@
 - VS Code内で公式 Appium Inspector を開く
 - Inspectorプラグインの導入、ローカルAppium Serverの起動・停止、ログ表示
 - Appium・Inspectorプラグイン・ドライバーの起動前チェック
+- 環境チェックからのAppium導入、Inspectorプラグイン導入、ドライバー導入コマンド表示
 - 接続状態表示と、セッションを作り直さない再接続
 - Android端末とiOSシミュレーターの一覧、およびCapabilities JSONひな形生成
 - Capability Sets、接続設定、テーマ、言語、保存済みジェスチャーのSecretStorage保存

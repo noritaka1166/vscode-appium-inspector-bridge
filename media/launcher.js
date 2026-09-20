@@ -111,6 +111,13 @@ function showEnvironment(data) {
       action.textContent = item.action;
       row.append(action);
     }
+    if (item.remediation && protocol.has(item.remediation)) {
+      const fix = document.createElement('button');
+      fix.type = 'button';
+      fix.textContent = text[item.remediation] || text.fix;
+      fix.onclick = () => send(item.remediation);
+      row.append(fix);
+    }
     results.append(row);
   }
   $('environment').hidden = false;

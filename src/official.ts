@@ -20,6 +20,10 @@ export interface UiText {
   managedProcess: string;
   running: string;
   stopped: string;
+  fix: string;
+  installAppium: string;
+  installOfficial: string;
+  showDriverGuide: string;
 }
 const japanese = (language?: string): boolean =>
   language?.toLowerCase().startsWith('ja') ?? false;
@@ -44,6 +48,10 @@ export function webviewText(language?: string): UiText {
         managedProcess: '拡張管理プロセス',
         running: '起動中',
         stopped: '停止中',
+        fix: '対処する',
+        installAppium: 'Appium 3 をインストール',
+        installOfficial: 'Inspector プラグインをインストール',
+        showDriverGuide: 'ドライバーの導入方法を表示',
       }
     : {
         selectDevice: 'Select a device',
@@ -63,6 +71,10 @@ export function webviewText(language?: string): UiText {
         managedProcess: 'Extension-managed process',
         running: 'Running',
         stopped: 'Stopped',
+        fix: 'Fix',
+        installAppium: 'Install Appium 3',
+        installOfficial: 'Install Inspector plugin',
+        showDriverGuide: 'Show driver installation options',
       };
 }
 
