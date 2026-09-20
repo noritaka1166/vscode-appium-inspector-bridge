@@ -1,10 +1,10 @@
 {
   "extension.displayName": "Appium Inspector Bridge",
   "extension.description": "Unofficial VS Code integration for the official Appium Inspector web UI.",
-  "viewsContainer.title": "Appium Inspector",
+  "viewsContainer.title": "Appium Inspector Bridge",
   "view.inspector.name": "Inspector",
-  "command.paste.title": "Appium Inspector: Paste",
-  "command.copy.title": "Appium Inspector: Copy",
-  "command.workspace.title": "Appium Inspector: Open Workspace",
-  "command.open.title": "Appium Inspector: Open"
+  "command.paste.title": "Appium Inspector Bridge: Paste",
+  "command.copy.title": "Appium Inspector Bridge: Copy",
+  "command.workspace.title": "Appium Inspector Bridge: Open Workspace",
+  "command.open.title": "Appium Inspector Bridge: Open"
 }

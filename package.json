@@ -27,54 +27,54 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "appiumInspector",
+          "id": "appiumInspectorBridge",
           "title": "%viewsContainer.title%",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "appiumInspector": [
+      "appiumInspectorBridge": [
         {
           "type": "webview",
-          "id": "appiumInspector.sidebar",
+          "id": "appiumInspectorBridge.sidebar",
           "name": "%view.inspector.name%"
         }
       ]
     },
     "commands": [
       {
-        "command": "appiumInspector.paste",
+        "command": "appiumInspectorBridge.paste",
         "title": "%command.paste.title%"
       },
       {
-        "command": "appiumInspector.copy",
+        "command": "appiumInspectorBridge.copy",
         "title": "%command.copy.title%"
       },
       {
-        "command": "appiumInspector.workspace",
+        "command": "appiumInspectorBridge.workspace",
         "title": "%command.workspace.title%"
       },
       {
-        "command": "appiumInspector.open",
+        "command": "appiumInspectorBridge.open",
         "title": "%command.open.title%"
       }
     ],
     "keybindings": [
       {
-        "command": "appiumInspector.paste",
+        "command": "appiumInspectorBridge.paste",
         "key": "ctrl+v",
         "mac": "cmd+v",
-        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'"
+        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspectorBridge.official'"
       },
       {
-        "command": "appiumInspector.copy",
+        "command": "appiumInspectorBridge.copy",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspector.official'"
+        "when": "webviewFocus && activeWebviewPanelId == 'appiumInspectorBridge.official'"
       },
       {
-        "command": "appiumInspector.open",
+        "command": "appiumInspectorBridge.open",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
         "when": "editorTextFocus || activeEditorIsDirty"

@@ -1,6 +1,6 @@
 const vscode = acquireVsCodeApi();
 const $ = id => document.getElementById(id);
-const text = window.appiumInspectorText || { selectDevice: 'Select a device', noDevices: 'No selectable devices found', checking: 'Checking', connected: 'Connected', disconnected: 'Disconnected', invalidUrl: 'Check the URL (local HTTP only)', managed: 'Extension-managed', external: 'External', unknown: 'Unknown origin', verified: 'Verified', warning: 'Warning', actionRequired: 'Action required', notChecked: 'Not checked', working: 'Working…', managedProcess: 'Extension-managed process', running: 'Running', stopped: 'Stopped' };
+const text = window.appiumInspectorBridgeText || { selectDevice: 'Select a device', noDevices: 'No selectable devices found', checking: 'Checking', connected: 'Connected', disconnected: 'Disconnected', invalidUrl: 'Check the URL (local HTTP only)', managed: 'Extension-managed', external: 'External', unknown: 'Unknown origin', verified: 'Verified', warning: 'Warning', actionRequired: 'Action required', notChecked: 'Not checked', working: 'Working…', managedProcess: 'Extension-managed process', running: 'Running', stopped: 'Stopped' };
 const previous = vscode.getState();
 if (previous?.serverUrl) $('server-url').value = previous.serverUrl;
 $('server-url').onchange = () => { vscode.setState({ serverUrl: $('server-url').value }); send('watchServer'); };

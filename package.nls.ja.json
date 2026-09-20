@@ -1,10 +1,10 @@
 {
   "extension.displayName": "Appium Inspector Bridge",
   "extension.description": "公式 Appium Inspector の Web UI を VS Code へ統合する非公式拡張です。",
-  "viewsContainer.title": "Appium Inspector",
+  "viewsContainer.title": "Appium Inspector Bridge",
   "view.inspector.name": "インスペクター",
-  "command.paste.title": "Appium Inspector: 貼り付け",
-  "command.copy.title": "Appium Inspector: コピー",
-  "command.workspace.title": "Appium Inspector: ワークスペースで開く",
-  "command.open.title": "Appium Inspector: 開く"
+  "command.paste.title": "Appium Inspector Bridge: 貼り付け",
+  "command.copy.title": "Appium Inspector Bridge: コピー",
+  "command.workspace.title": "Appium Inspector Bridge: ワークスペースで開く",
+  "command.open.title": "Appium Inspector Bridge: 開く"
 }

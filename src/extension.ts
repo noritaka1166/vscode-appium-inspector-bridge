@@ -35,22 +35,22 @@ export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel('Appium Inspector Bridge');
   context.subscriptions.push(
     connectionMonitor,
-    vscode.commands.registerCommand('appiumInspector.paste', async () => {
+    vscode.commands.registerCommand('appiumInspectorBridge.paste', async () => {
       if (officialPanel?.active && clipboardRelay) {
         await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
       }
     }),
-    vscode.commands.registerCommand('appiumInspector.copy', async () => {
+    vscode.commands.registerCommand('appiumInspectorBridge.copy', async () => {
       if (officialPanel?.active && clipboardRelay) await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'copy' });
     }),
     output,
     vscode.window.registerWebviewViewProvider(
-      'appiumInspector.sidebar',
+      'appiumInspectorBridge.sidebar',
       new InspectorSidebarProvider(context.extensionUri),
       { webviewOptions: { retainContextWhenHidden: true } }
     ),
-    vscode.commands.registerCommand('appiumInspector.open', openInspector),
-    vscode.commands.registerCommand('appiumInspector.workspace', () => handleMessage({ type: 'openOfficial', serverUrl: officialServer }))
+    vscode.commands.registerCommand('appiumInspectorBridge.open', openInspector),
+    vscode.commands.registerCommand('appiumInspectorBridge.workspace', () => handleMessage({ type: 'openOfficial', serverUrl: officialServer }))
   );
 }
 
@@ -73,7 +73,7 @@ class InspectorSidebarProvider implements vscode.WebviewViewProvider {
 }
 
 async function openInspector(): Promise<void> {
-  await vscode.commands.executeCommand('workbench.view.extension.appiumInspector');
+  await vscode.commands.executeCommand('workbench.view.extension.appiumInspectorBridge');
 }
 
 type WebviewMessage =
@@ -263,7 +263,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
   if (officialPanel) {
     officialPanel.reveal();
     // Preserve the live iframe/session when the same server is opened again.
-    if (officialPanel.title === `Appium Inspector · ${url.host}`) { return; }
+    if (officialPanel.title === `Appium Inspector Bridge · ${url.host}`) { return; }
     throw new Error(t('別サーバーを開く場合は、現在の公式 Inspector タブを閉じてから開いてください。', 'Close the current official Inspector tab before opening another server.'));
   }
   const bridgeLanguage = displayLanguage.toLowerCase().startsWith('ja') ? 'ja' : 'en';
@@ -271,7 +271,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
     .replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
   const storageAdapter = (await readFile(vscode.Uri.joinPath(extensionUri, 'media', 'storage-frame.js').fsPath, 'utf8'))
     .replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
-  const settingsKey = `inspector.settings.v1:${normaliseServerUrl(rawUrl)}`;
+  const settingsKey = `appiumInspectorBridge.settings.v1:${normaliseServerUrl(rawUrl)}`;
   await settingsWrites;
   const saved = await secrets.get(settingsKey);
   let values = saved ? validateSettings(JSON.parse(saved)) : {};
@@ -279,7 +279,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
     JSON.stringify({ token, keys: settingKeys, values, upstreamPort: url.port || '80' }).replaceAll('<', String.raw`\u003c`)),
   t('Appium Server に接続できません。', 'Could not connect to Appium Server.'));
   clipboardRelay = relay;
-  const panel = vscode.window.createWebviewPanel('appiumInspector.official', `Appium Inspector · ${url.host}`, vscode.ViewColumn.One,
+  const panel = vscode.window.createWebviewPanel('appiumInspectorBridge.official', `Appium Inspector Bridge · ${url.host}`, vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
   officialPanel = panel;
   const reloadState = { pending: false };

@@ -33,8 +33,8 @@ test('official-only launcher and failed connection clears loading', async () => 
   assert.match(view.html, /公式 Inspector/);
   assert.match(view.html, /初回セットアップ/);
   assert.doesNotMatch(view.html, /legacy|簡易 Inspector/);
-  assert.equal(commands.has('appiumInspector.legacy'), false);
-  assert.equal(require('../package.json').contributes.commands.some(c => c.command === 'appiumInspector.legacy'), false);
+  assert.equal(commands.has('appiumInspectorBridge.legacy'), false);
+  assert.equal(require('../package.json').contributes.commands.some(c => c.command === 'appiumInspectorBridge.legacy'), false);
   await receive({ type: 'ready' });
   assert.ok(events.some(m => m.type === 'server' && !m.running));
   fail = true;
