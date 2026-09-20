@@ -19,6 +19,20 @@
   "categories": [
     "Testing"
   ],
+  "keywords": [
+    "appium",
+    "appium inspector",
+    "mobile testing",
+    "mobile automation",
+    "android",
+    "ios",
+    "webdriver"
+  ],
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#0E639C",
+    "theme": "dark"
+  },
   "main": "./out/extension.js",
   "extensionKind": [
     "ui"
