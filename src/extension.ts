@@ -174,7 +174,7 @@ async function installOfficial(): Promise<void> {
 async function startOfficial(serverUrl: string): Promise<void> {
   inspectorUrl(serverUrl);
   connectionMonitor.watch(serverUrl);
-  if (await isServerReachable(normaliseServerUrl(serverUrl))) return openOfficial(serverUrl);
+  if (await isServerReachable(normalizeServerUrl(serverUrl))) return openOfficial(serverUrl);
   const report = await inspectEnvironment();
   if (!report.canStart) throw new Error(t('起動前チェックで問題が見つかりました。環境チェック結果の対処方法を確認してください。', 'Preflight found an issue. Review the Environment Check results for next steps.'));
   post({ type: 'loading', active: true, label: t('Appium Server を起動しています…', 'Starting Appium Server…') });
@@ -271,7 +271,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
     .replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
   const storageAdapter = (await readFile(vscode.Uri.joinPath(extensionUri, 'media', 'storage-frame.js').fsPath, 'utf8'))
     .replace('__BRIDGE_LANGUAGE__', JSON.stringify(bridgeLanguage));
-  const settingsKey = `appiumInspectorBridge.settings.v1:${normaliseServerUrl(rawUrl)}`;
+  const settingsKey = `appiumInspectorBridge.settings.v1:${normalizeServerUrl(rawUrl)}`;
   await settingsWrites;
   const saved = await secrets.get(settingsKey);
   let values = saved ? validateSettings(JSON.parse(saved)) : {};
@@ -318,7 +318,7 @@ async function startServer(rawServerUrl: string): Promise<void> {
     throw new Error(t('この拡張機能から起動した Appium Server はすでに動作しています。', 'An Appium Server started by this extension is already running.'));
   }
 
-  const serverUrl = normaliseServerUrl(rawServerUrl);
+  const serverUrl = normalizeServerUrl(rawServerUrl);
   const url = new URL(serverUrl);
   const permittedHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
   if (!permittedHosts.has(url.hostname)) {
@@ -434,7 +434,7 @@ async function waitForServer(serverUrl: string, child: ChildProcessWithoutNullSt
   throw new Error(t('Appium Server の起動がタイムアウトしました。出力パネルの Appium Inspector Bridge ログを確認してください。', 'Starting Appium Server timed out. Check the Appium Inspector Bridge output log.'));
 }
 
-function normaliseServerUrl(value: string): string {
+function normalizeServerUrl(value: string): string {
   let url = value.trim();
   while (url.endsWith('/')) url = url.slice(0, -1);
   if (!/^https?:\/\//i.test(url)) {
