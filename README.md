@@ -4,6 +4,8 @@
 
 An unofficial VS Code extension that embeds the official Appium Inspector web UI in an editor tab. It uses the official Inspector UI exclusively rather than maintaining a separate inspector implementation.
 
+![Appium Inspector Bridge running inside VS Code](media/inspector-hero.png)
+
 ## Features
 
 - Open the official Appium Inspector plugin inside VS Code.

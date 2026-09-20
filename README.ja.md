@@ -4,6 +4,8 @@
 
 公式 Appium Inspector プラグインのWeb UIを、VS Codeのエディタータブ内で利用する非公式拡張です。独自のInspector実装ではなく、公式UIをそのまま利用します。
 
+![VS Code内で動作するAppium Inspector Bridge](media/inspector-hero.png)
+
 ## 主な機能
 
 - VS Code内で公式 Appium Inspector を開く
