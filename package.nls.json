@@ -1,6 +1,6 @@
 {
   "extension.displayName": "Appium Inspector Bridge",
-  "extension.description": "Unofficial VS Code integration for the official Appium Inspector web UI.",
+  "extension.description": "Unofficial VS Code bridge for the official Appium Inspector—inspect Android and iOS sessions, start local Appium, and build capabilities.",
   "viewsContainer.title": "Appium Inspector Bridge",
   "view.inspector.name": "Inspector",
   "command.paste.title": "Appium Inspector Bridge: Paste",

@@ -1,6 +1,6 @@
 {
   "extension.displayName": "Appium Inspector Bridge",
-  "extension.description": "公式 Appium Inspector の Web UI を VS Code へ統合する非公式拡張です。",
+  "extension.description": "公式 Appium Inspector をVS Code内で使う非公式ブリッジ。Android／iOSセッションの確認、ローカルAppium起動、Capabilities作成を支援します。",
   "viewsContainer.title": "Appium Inspector Bridge",
   "view.inspector.name": "インスペクター",
   "command.paste.title": "Appium Inspector Bridge: 貼り付け",
