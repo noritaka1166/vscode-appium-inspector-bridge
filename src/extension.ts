@@ -396,8 +396,8 @@ async function installAppium(): Promise<void> {
   } catch {
     throw new Error(
       t(
-        'npm コマンドが見つかりません。Node.js 24 を導入し、npm が PATH にある環境から VS Code を再起動してください。',
-        'npm command was not found. Install Node.js 24, then restart VS Code from an environment where npm is on PATH.',
+        'npm コマンドが見つかりません。Appium 3対応のNode.jsとnpm 10以上を導入し、npm が PATH にある環境から VS Code を再起動してください。',
+        'npm command was not found. Install an Appium 3-supported Node.js version and npm 10 or later, then restart VS Code from an environment where npm is on PATH.',
       ),
     );
   }

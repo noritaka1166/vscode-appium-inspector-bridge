@@ -20,11 +20,29 @@ An unofficial VS Code extension that embeds the official Appium Inspector web UI
 
 ## Requirements
 
-- Appium 3 and the driver required by your target platform.
-- The official Appium Inspector plugin: `appium plugin install inspector`.
-- A desktop VS Code instance that can reach a local HTTP server (`localhost`, `127.0.0.1`, or `::1`). Remote SSH, browser VS Code, and automatic container forwarding are not supported.
+### Required for every platform
 
-Start VS Code from an environment where `appium` is available on `PATH`. On Windows, the extension supports the npm `.cmd` launchers used by standard Node.js installations.
+- Desktop VS Code. The extension connects only to local loopback servers (`localhost`, `127.0.0.1`, or `::1`); Remote SSH, browser VS Code, and automatic container forwarding are not supported.
+- A supported Node.js version and npm 10 or later. Appium 3 supports Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0`; an active LTS release is recommended. Start VS Code from an environment where both `node` and `npm` are available on `PATH`.
+- Appium 3, the official Inspector plugin, and an Appium driver for the platform you intend to inspect.
+
+The extension checks these Appium components and can install Appium 3 and the official Inspector plugin from **Initial Setup** after confirmation. It does not bundle them in the VSIX, so they remain compatible with your Node.js installation and can be updated independently.
+
+### Android
+
+- Android SDK Platform-Tools, including `adb` on `PATH` (or configured with `ANDROID_HOME` / `ANDROID_SDK_ROOT`).
+- A connected Android device or a running Android emulator.
+- The UiAutomator2 driver: `appium driver install uiautomator2`.
+
+### iOS
+
+- macOS with Xcode and Xcode Command Line Tools installed.
+- An available iOS Simulator, or an iOS device configured for Xcode development and code signing.
+- The XCUITest driver: `appium driver install xcuitest`.
+
+The extension can list iOS simulators through `xcrun simctl`, but it cannot bundle Xcode, the Android SDK, device images, or signing credentials. Install those platform tools before creating a session.
+
+On Windows, the extension supports the npm `.cmd` launchers used by standard Node.js installations.
 
 ## Quick start
 

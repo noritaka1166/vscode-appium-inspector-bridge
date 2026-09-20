@@ -20,11 +20,29 @@
 
 ## 必要環境
 
-- Appium 3と対象プラットフォーム用ドライバー
-- 公式Inspectorプラグイン（`appium plugin install inspector`）
-- ローカルHTTPサーバーへ接続できるデスクトップ版VS Code
+### 全プラットフォーム共通
 
-`appium` コマンドを実行できるPATHでVS Codeを起動してください。対応する接続先は `localhost`、`127.0.0.1`、`::1` です。Remote SSH、ブラウザー版VS Code、コンテナへの自動転送は対象外です。Windowsの標準的なNode.js環境で使われる npm の `.cmd` ランチャーにも対応します。
+- デスクトップ版VS Code。接続先はローカルのループバックサーバー（`localhost`、`127.0.0.1`、`::1`）のみです。Remote SSH、ブラウザー版VS Code、コンテナへの自動転送は対象外です。
+- Appium 3が対応するNode.jsとnpm 10以上。Appium 3は Node.js `^20.19.0`、`^22.12.0`、または `>=24.0.0` をサポートしており、現行LTSの利用を推奨します。`node` と `npm` の両方をPATHから実行できる環境でVS Codeを起動してください。
+- Appium 3、公式Inspectorプラグイン、および利用するプラットフォーム用のAppiumドライバー。
+
+拡張機能はこれらのAppium関連コンポーネントを環境チェックで確認し、確認後に **Initial Setup / 初回セットアップ** からAppium 3と公式Inspectorプラグインを導入できます。VSIXには同梱しないため、利用中のNode.js環境との整合性を保ち、個別に更新できます。
+
+### Android
+
+- `adb` を含むAndroid SDK Platform-Tools。`adb` をPATHへ設定するか、`ANDROID_HOME` / `ANDROID_SDK_ROOT` を設定してください。
+- 接続済みのAndroid端末、または起動中のAndroidエミュレーター。
+- UiAutomator2ドライバー: `appium driver install uiautomator2`
+
+### iOS
+
+- XcodeおよびXcode Command Line Toolsを導入したmacOS。
+- 利用可能なiOSシミュレーター、またはXcode開発・コード署名を設定したiOS実機。
+- XCUITestドライバー: `appium driver install xcuitest`
+
+拡張機能は `xcrun simctl` でiOSシミュレーターを一覧表示できますが、Xcode、Android SDK、端末イメージ、署名用認証情報は同梱できません。セッション開始前にこれらのプラットフォーム用ツールを導入してください。
+
+Windowsの標準的なNode.js環境で使われる npm の `.cmd` ランチャーにも対応します。
 
 ## 使い方
 
