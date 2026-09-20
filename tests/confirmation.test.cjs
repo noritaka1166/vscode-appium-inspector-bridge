@@ -95,7 +95,9 @@ function host() {
       if (name === './environment')
         return {
           checkEnvironment: async () => ({ canStart: true, items: [] }),
+          createAppiumRunner: () => async () => '',
           resolveAppiumExecutable: async () => '/trusted/appium',
+          resolveWorkspaceAppiumExecutable: async () => undefined,
         };
       if (name === 'node:child_process')
         return {

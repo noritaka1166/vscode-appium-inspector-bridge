@@ -80,7 +80,9 @@ function setup({ trusted = true, reachable = false, canStart = false } = {}) {
             checks++;
             return report;
           },
+          createAppiumRunner: () => async () => '',
           resolveAppiumExecutable: async () => '/trusted/appium',
+          resolveWorkspaceAppiumExecutable: async () => undefined,
         };
       if (name === 'node:child_process')
         return {

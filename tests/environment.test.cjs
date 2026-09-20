@@ -1,6 +1,20 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { checkEnvironment, commandInvocation } = require('../out/environment');
+const {
+  chmod,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  writeFile,
+} = require('node:fs/promises');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const {
+  checkEnvironment,
+  commandInvocation,
+  resolveWorkspaceAppiumExecutable,
+} = require('../out/environment');
 
 function runner({
   version = '3.6.0',
@@ -102,4 +116,28 @@ test('Windows .cmd launchers use cmd.exe without enabling a shell', () => {
       ],
     },
   );
+});
+
+test('workspace-local Appium launchers are discovered before PATH fallback', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'appium-inspector-bridge-'));
+  try {
+    const bin = join(workspace, 'node_modules', '.bin');
+    await mkdir(bin, { recursive: true });
+    const appium = join(bin, 'appium');
+    await writeFile(appium, '#!/usr/bin/env node\n');
+    await chmod(appium, 0o755);
+    assert.equal(
+      await resolveWorkspaceAppiumExecutable(workspace),
+      await realpath(appium),
+    );
+
+    const appiumCmd = join(bin, 'appium.cmd');
+    await writeFile(appiumCmd, '@echo off\n');
+    assert.equal(
+      await resolveWorkspaceAppiumExecutable(workspace, undefined, 'win32'),
+      await realpath(appiumCmd),
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
 });

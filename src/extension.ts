@@ -6,10 +6,13 @@ import { runLoggedCommand } from './command-runner';
 import { ConnectionMonitor, probeServer, serverKey } from './connection';
 import { capabilitiesFor, type DeviceReport, listDevices } from './devices';
 import {
+  type AppiumRuntime,
   checkEnvironment,
+  createAppiumRunner,
   type EnvironmentReport,
   resolveAppiumExecutable,
   resolveNpmExecutable,
+  resolveWorkspaceAppiumExecutable,
 } from './environment';
 import { setLanguage, t } from './i18n';
 import { InspectorPanelManager } from './inspector-panel-manager';
@@ -34,6 +37,31 @@ let launcherController: LauncherController;
 let inspectorPanels: InspectorPanelManager;
 let settings: InspectorSettingsStore;
 
+async function resolveAppiumRuntime(): Promise<AppiumRuntime> {
+  if (vscode.workspace.isTrusted) {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    const active = activeUri
+      ? vscode.workspace.getWorkspaceFolder(activeUri)
+      : undefined;
+    const ordered = active
+      ? [active, ...folders.filter((folder) => folder !== active)]
+      : folders;
+    for (const folder of ordered) {
+      const executable = await resolveWorkspaceAppiumExecutable(
+        folder.uri.fsPath,
+      );
+      if (executable)
+        return {
+          executable,
+          cwd: folder.uri.fsPath,
+          source: 'workspace',
+        };
+    }
+  }
+  return { executable: await resolveAppiumExecutable(), source: 'path' };
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   displayLanguage = vscode.env?.language ?? 'ja';
   setLanguage(displayLanguage);
@@ -48,7 +76,7 @@ export function activate(context: vscode.ExtensionContext): void {
   appiumServer = new AppiumServerController(
     output,
     post,
-    resolveAppiumExecutable,
+    resolveAppiumRuntime,
     spawn,
     async (title, detail, accept) =>
       (await vscode.window.showWarningMessage(
@@ -549,7 +577,21 @@ async function inspectEnvironment(): Promise<EnvironmentReport> {
       'Checking Appium, plugins, and drivers…',
     ),
   });
-  environmentReport = await checkEnvironment();
+  const runtime = await resolveAppiumRuntime();
+  output.appendLine(
+    runtime.source === 'workspace'
+      ? t(
+          `ワークスペースの Appium を使用します: ${runtime.executable}`,
+          `Using workspace Appium: ${runtime.executable}`,
+        )
+      : t(
+          `PATH の Appium を使用します: ${runtime.executable}`,
+          `Using PATH Appium: ${runtime.executable}`,
+        ),
+  );
+  environmentReport = await checkEnvironment(
+    createAppiumRunner(async () => runtime),
+  );
   post({ type: 'environment', report: environmentReport });
   for (const item of environmentReport.items)
     output.appendLine(
@@ -631,21 +673,26 @@ async function installOfficialPlugin(): Promise<void> {
     );
   }
   output.show(true);
-  const appium = await resolveAppiumExecutable();
-  await runLoggedCommand(appium, ['plugin', 'install', 'inspector'], {
-    output,
-    failure: t(
-      'プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。',
-      'Plugin installation failed. Check Logs; if it is already installed, you can start normally.',
-    ),
-    startFailure: (error) =>
-      new Error(
-        t(
-          `Appium を実行できません: ${error.message}`,
-          `Cannot run Appium: ${error.message}`,
-        ),
+  const runtime = await resolveAppiumRuntime();
+  await runLoggedCommand(
+    runtime.executable,
+    ['plugin', 'install', 'inspector'],
+    {
+      output,
+      cwd: runtime.cwd,
+      failure: t(
+        'プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。',
+        'Plugin installation failed. Check Logs; if it is already installed, you can start normally.',
       ),
-  });
+      startFailure: (error) =>
+        new Error(
+          t(
+            `Appium を実行できません: ${error.message}`,
+            `Cannot run Appium: ${error.message}`,
+          ),
+        ),
+    },
+  );
 }
 
 function post(message: unknown): void {

@@ -30,6 +30,10 @@ An unofficial VS Code extension that embeds the official Appium Inspector web UI
 
 The extension checks these Appium components and can install Appium 3 and the official Inspector plugin from **Initial Setup** after confirmation. It does not bundle them in the VSIX, so they remain compatible with your Node.js installation and can be updated independently.
 
+### Workspace-local Appium
+
+In a trusted workspace, the extension first looks for `node_modules/.bin/appium` in the active editor's workspace folder, then in the other workspace folders. When found, it uses that local Appium for Environment Check, starting the server, and installing the Inspector plugin. This lets a repository keep its Appium and driver versions in `package.json`; run your package manager's install step before opening the Inspector. If no workspace-local launcher exists, the extension falls back to `appium` on `PATH`.
+
 ### Android
 
 - Android SDK Platform-Tools, including `adb` on `PATH` (or configured with `ANDROID_HOME` / `ANDROID_SDK_ROOT`).

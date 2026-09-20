@@ -9,6 +9,12 @@ export interface CommandInvocation {
   args: string[];
 }
 
+export interface AppiumRuntime {
+  executable: string;
+  cwd?: string;
+  source: 'workspace' | 'path';
+}
+
 type RemediationAction =
   | 'installAppium'
   | 'installOfficial'
@@ -101,6 +107,27 @@ async function resolveTrustedCommand(
   throw commandNotFound();
 }
 
+/** Finds the Appium launcher installed by the currently trusted workspace. */
+export async function resolveWorkspaceAppiumExecutable(
+  workspacePath: string,
+  uid = process.getuid?.(),
+  platform = nodePlatform,
+): Promise<string | undefined> {
+  const candidates =
+    platform === 'win32'
+      ? ['appium.cmd', 'appium.exe', 'appium.bat', 'appium']
+      : ['appium'];
+  for (const candidate of candidates) {
+    const executable = await trustedExecutable(
+      join(workspacePath, 'node_modules', '.bin', candidate),
+      uid,
+      platform,
+    );
+    if (executable) return executable;
+  }
+  return undefined;
+}
+
 export async function resolveAppiumExecutable(
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),
@@ -167,6 +194,32 @@ const runAppium: AppiumRunner = async (args) => {
     );
   });
 };
+
+/** Creates a runner that consistently uses the selected global or workspace Appium. */
+export function createAppiumRunner(
+  runtime: () => Promise<AppiumRuntime>,
+): AppiumRunner {
+  return async (args) => {
+    const selected = await runtime();
+    const invocation = commandInvocation(selected.executable, args);
+    return new Promise((resolve, reject) => {
+      execFile(
+        invocation.command,
+        invocation.args,
+        {
+          cwd: selected.cwd,
+          timeout: 15_000,
+          maxBuffer: 1024 * 1024,
+          encoding: 'utf8',
+        },
+        (error, stdout, stderr) => {
+          if (error) reject(error);
+          else resolve(`${stdout}${stderr}`.trim());
+        },
+      );
+    });
+  };
+}
 
 function installed(
   output: string,

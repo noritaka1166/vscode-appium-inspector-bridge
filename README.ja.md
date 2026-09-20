@@ -30,6 +30,10 @@
 
 拡張機能はこれらのAppium関連コンポーネントを環境チェックで確認し、確認後に **Initial Setup / 初回セットアップ** からAppium 3と公式Inspectorプラグインを導入できます。VSIXには同梱しないため、利用中のNode.js環境との整合性を保ち、個別に更新できます。
 
+### ワークスペースローカルのAppium
+
+信頼済みワークスペースでは、まずアクティブなエディターが属するワークスペースフォルダーの `node_modules/.bin/appium` を探し、見つからない場合は他のワークスペースフォルダーも確認します。見つかった場合は、環境チェック・Server起動・Inspectorプラグイン導入でそのローカルAppiumを使用します。これにより、リポジトリの `package.json` でAppiumやドライバーのバージョンを管理できます。Inspectorを開く前に、パッケージマネージャーの依存関係導入を完了してください。ローカルランチャーがない場合は、従来どおりPATH上の `appium` を使用します。
+
 ### Android
 
 - `adb` を含むAndroid SDK Platform-Tools。`adb` をPATHへ設定するか、`ANDROID_HOME` / `ANDROID_SDK_ROOT` を設定してください。

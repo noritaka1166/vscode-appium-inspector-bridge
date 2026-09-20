@@ -6,6 +6,7 @@ type Output = { append(data: string): void };
 export interface LoggedCommandOptions {
   output: Output;
   failure: string;
+  cwd?: string;
   startFailure?: (error: Error) => Error;
   spawnProcess?: typeof spawn;
 }
@@ -14,7 +15,13 @@ export interface LoggedCommandOptions {
 export async function runLoggedCommand(
   command: string,
   args: string[],
-  { output, failure, startFailure, spawnProcess = spawn }: LoggedCommandOptions,
+  {
+    output,
+    failure,
+    cwd,
+    startFailure,
+    spawnProcess = spawn,
+  }: LoggedCommandOptions,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
@@ -22,6 +29,7 @@ export async function runLoggedCommand(
       const invocation = commandInvocation(command, args);
       child = spawnProcess(invocation.command, invocation.args, {
         shell: false,
+        cwd,
       });
     } catch (error) {
       const reason = error instanceof Error ? error : new Error(String(error));

@@ -1,6 +1,10 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { serverKey } from './connection';
-import { commandInvocation, resolveAppiumExecutable } from './environment';
+import {
+  type AppiumRuntime,
+  commandInvocation,
+  resolveAppiumExecutable,
+} from './environment';
 import { t } from './i18n';
 
 type Post = (message: unknown) => void;
@@ -10,6 +14,7 @@ type ConfirmStop = (
   detail: string,
   accept: string,
 ) => Promise<boolean>;
+type RuntimeResolver = () => Promise<AppiumRuntime | string>;
 
 export function normalizeServerUrl(value: string): string {
   let url = value.trim();
@@ -33,7 +38,7 @@ export class AppiumServerController {
   constructor(
     private readonly output: Output,
     private readonly post: Post,
-    private readonly executable = resolveAppiumExecutable,
+    private readonly runtime: RuntimeResolver = resolveAppiumExecutable,
     private readonly spawnProcess: typeof spawn = spawn,
     private readonly confirmStop: ConfirmStop = async () => false,
     private readonly request: typeof fetch = fetch,
@@ -113,9 +118,11 @@ export class AppiumServerController {
         `Starting Appium Server: appium ${args.join(' ')}`,
       ),
     );
-    const invocation = commandInvocation(await this.appiumExecutable(), args);
+    const runtime = await this.appiumRuntime();
+    const invocation = commandInvocation(runtime.executable, args);
     const child = this.spawnProcess(invocation.command, invocation.args, {
       shell: false,
+      cwd: runtime.cwd,
     });
     this.process = child;
     this.managedUrl = serverKey(serverUrl);
@@ -219,15 +226,21 @@ export class AppiumServerController {
     });
   }
 
-  private appiumExecutable(): Promise<string> {
-    return this.executable().catch(() => {
-      throw new Error(
-        t(
-          'appium コマンドが見つかりません。`npm install -g appium` を実行してから、VS Code を再起動してください。',
-          'appium command was not found. Run `npm install -g appium`, then restart VS Code.',
-        ),
-      );
-    });
+  private async appiumRuntime(): Promise<AppiumRuntime> {
+    return this.runtime()
+      .then((value) =>
+        typeof value === 'string'
+          ? { executable: value, source: 'path' as const }
+          : value,
+      )
+      .catch(() => {
+        throw new Error(
+          t(
+            'appium コマンドが見つかりません。`npm install -g appium` を実行してから、VS Code を再起動してください。',
+            'appium command was not found. Run `npm install -g appium`, then restart VS Code.',
+          ),
+        );
+      });
   }
 
   private waitForProcessExit(
