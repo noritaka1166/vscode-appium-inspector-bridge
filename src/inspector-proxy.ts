@@ -34,7 +34,14 @@ export async function startInspectorProxy(upstream: URL, adapter: string, bootst
         });
       } else { res.writeHead(incoming.statusCode || 502, responseHeaders); incoming.pipe(res); }
     });
-    forward.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(unavailableMessage); });
+    forward.on('error', () => {
+      if (!res.headersSent) {
+        res.writeHead(502);
+        res.end(unavailableMessage);
+        return;
+      }
+      res.destroy();
+    });
     forward.setTimeout(180000, () => forward.destroy());
     req.on('aborted', () => forward.destroy());
     req.pipe(forward);

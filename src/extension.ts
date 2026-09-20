@@ -284,7 +284,7 @@ async function openOfficial(rawUrl: string): Promise<void> {
   officialPanel = panel;
   const reloadState = { pending: false };
   panel.webview.onDidReceiveMessage(async (message: InspectorMessage) => {
-    if (!message || message.bridge !== relay.token) return;
+    if (message?.bridge !== relay.token) return;
     if (message.type === 'requestReload') {
       await handleInspectorReload(panel, relay, reloadState);
       return;

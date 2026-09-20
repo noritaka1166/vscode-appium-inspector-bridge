@@ -4,7 +4,7 @@ export function setLanguage(value: string | undefined): void {
   language = value?.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
-export function isJapanese(): boolean {
+function isJapanese(): boolean {
   return language === 'ja';
 }
 
