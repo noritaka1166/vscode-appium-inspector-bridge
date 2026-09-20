@@ -24,7 +24,7 @@ An unofficial VS Code extension that embeds the official Appium Inspector web UI
 - The official Appium Inspector plugin: `appium plugin install inspector`.
 - A desktop VS Code instance that can reach a local HTTP server (`localhost`, `127.0.0.1`, or `::1`). Remote SSH, browser VS Code, and automatic container forwarding are not supported.
 
-Start VS Code from an environment where `appium` is available on `PATH`. On Windows, start Appium externally and use **Open Running Inspector** because npm `.cmd` launcher support is unavailable.
+Start VS Code from an environment where `appium` is available on `PATH`. On Windows, the extension supports the npm `.cmd` launchers used by standard Node.js installations.
 
 ## Quick start
 

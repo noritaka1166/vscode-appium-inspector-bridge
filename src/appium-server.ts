@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { serverKey } from './connection';
-import { resolveAppiumExecutable } from './environment';
+import { commandInvocation, resolveAppiumExecutable } from './environment';
 import { t } from './i18n';
 
 type Post = (message: unknown) => void;
@@ -113,7 +113,8 @@ export class AppiumServerController {
         `Starting Appium Server: appium ${args.join(' ')}`,
       ),
     );
-    const child = this.spawnProcess(await this.appiumExecutable(), args, {
+    const invocation = commandInvocation(await this.appiumExecutable(), args);
+    const child = this.spawnProcess(invocation.command, invocation.args, {
       shell: false,
     });
     this.process = child;

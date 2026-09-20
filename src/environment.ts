@@ -4,6 +4,11 @@ import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { platform as nodePlatform } from 'node:process';
 import { t } from './i18n';
 
+export interface CommandInvocation {
+  command: string;
+  args: string[];
+}
+
 type RemediationAction =
   | 'installAppium'
   | 'installOfficial'
@@ -43,14 +48,22 @@ function hasTrustedPermissions(
 async function trustedExecutable(
   candidate: string,
   uid: number | undefined,
+  platform: NodeJS.Platform,
 ): Promise<string | undefined> {
   try {
     const executable = await realpath(candidate);
     const file = await stat(executable);
-    if (!file.isFile() || !hasTrustedPermissions(file, uid)) return undefined;
+    if (
+      !file.isFile() ||
+      (platform !== 'win32' && !hasTrustedPermissions(file, uid))
+    )
+      return undefined;
     for (let directory = dirname(executable); ; ) {
       const entry = await stat(directory);
-      if (!entry.isDirectory() || !hasTrustedPermissions(entry, uid))
+      if (
+        !entry.isDirectory() ||
+        (platform !== 'win32' && !hasTrustedPermissions(entry, uid))
+      )
         return undefined;
       const parent = dirname(directory);
       if (parent === directory) return executable;
@@ -67,11 +80,23 @@ async function resolveTrustedCommand(
   command: string,
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),
+  platform = nodePlatform,
 ): Promise<string> {
-  for (const directory of pathValue.split(delimiter)) {
+  const candidates =
+    platform === 'win32'
+      ? [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]
+      : [command];
+  const pathDelimiter = platform === 'win32' ? ';' : delimiter;
+  for (const directory of pathValue.split(pathDelimiter)) {
     if (!isAbsolute(directory)) continue;
-    const executable = await trustedExecutable(join(directory, command), uid);
-    if (executable) return executable;
+    for (const candidate of candidates) {
+      const executable = await trustedExecutable(
+        join(directory, candidate),
+        uid,
+        platform,
+      );
+      if (executable) return executable;
+    }
   }
   throw commandNotFound();
 }
@@ -79,23 +104,43 @@ async function resolveTrustedCommand(
 export async function resolveAppiumExecutable(
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),
+  platform = nodePlatform,
 ): Promise<string> {
-  return resolveTrustedCommand('appium', pathValue, uid);
+  return resolveTrustedCommand('appium', pathValue, uid, platform);
 }
 
 export async function resolveNpmExecutable(
   pathValue = process.env.PATH ?? '',
   uid = process.getuid?.(),
+  platform = nodePlatform,
 ): Promise<string> {
-  return resolveTrustedCommand('npm', pathValue, uid);
+  return resolveTrustedCommand('npm', pathValue, uid, platform);
+}
+
+/** Execute trusted Windows .cmd/.bat launchers through cmd.exe without a shell. */
+export function commandInvocation(
+  executable: string,
+  args: string[],
+  platform = nodePlatform,
+  commandProcessor = process.env.ComSpec ||
+    String.raw`C:\Windows\System32\cmd.exe`,
+): CommandInvocation {
+  if (platform !== 'win32' || !/\.(?:cmd|bat)$/i.test(executable))
+    return { command: executable, args };
+  const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
+  return {
+    command: commandProcessor,
+    args: ['/d', '/s', '/c', [executable, ...args].map(quote).join(' ')],
+  };
 }
 
 const runAppium: AppiumRunner = async (args) => {
   const executable = await resolveAppiumExecutable();
+  const invocation = commandInvocation(executable, args);
   return new Promise((resolve, reject) => {
     execFile(
-      executable,
-      args,
+      invocation.command,
+      invocation.args,
       { timeout: 15_000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
       (error, stdout, stderr) => {
         if (error) {
@@ -154,28 +199,9 @@ function installed(
 
 export async function checkEnvironment(
   run: AppiumRunner = runAppium,
-  platform = nodePlatform,
+  _platform = nodePlatform,
 ): Promise<EnvironmentReport> {
   let items: CheckItem[] = [];
-  if (platform === 'win32') {
-    return {
-      canStart: false,
-      items: [
-        {
-          name: 'Appium CLI',
-          status: 'error',
-          detail: t(
-            'Windows の npm .cmd ランチャーからの起動・環境チェックは未対応です。',
-            'Starting and checking npm .cmd launchers on Windows is not supported.',
-          ),
-          action: t(
-            'ターミナルで appium --use-plugins=inspector を起動し、「起動済みの Inspector を開く」を使用してください。',
-            'Start `appium --use-plugins=inspector` in a terminal, then use “Open Running Inspector”.',
-          ),
-        },
-      ],
-    };
-  }
   try {
     const version = await run(['--version']);
     const match = /^(\d+)\.\d+\.\d+(?:[-+][\w.+-]+)?$/.exec(version);

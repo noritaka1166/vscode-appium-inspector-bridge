@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { checkEnvironment } = require('../out/environment');
+const { checkEnvironment, commandInvocation } = require('../out/environment');
 
 function runner({
   version = '3.6.0',
@@ -76,10 +76,30 @@ test('malformed JSON and execution failures remain unknown, not missing', async 
   }, 'darwin');
   assert.match(report.items[2].action, /APPIUM_HOME/);
 });
-test('Windows provides external-server alternative without spawning', async () => {
-  const report = await checkEnvironment(async () => {
-    throw Error('must not run');
-  }, 'win32');
-  assert.equal(report.canStart, false);
-  assert.match(report.items[0].action, /起動済み/);
+test('Windows checks the Appium environment like other desktop platforms', async () => {
+  const report = await checkEnvironment(runner(), 'win32');
+  assert.equal(report.canStart, true);
+  assert.deepEqual(
+    report.items.map((item) => item.status),
+    ['ok', 'ok', 'ok'],
+  );
+});
+test('Windows .cmd launchers use cmd.exe without enabling a shell', () => {
+  assert.deepEqual(
+    commandInvocation(
+      'C:\\Users\\test\\AppData\\Roaming\\npm\\appium.cmd',
+      ['--version'],
+      'win32',
+      'C:\\Windows\\System32\\cmd.exe',
+    ),
+    {
+      command: 'C:\\Windows\\System32\\cmd.exe',
+      args: [
+        '/d',
+        '/s',
+        '/c',
+        '"C:\\Users\\test\\AppData\\Roaming\\npm\\appium.cmd" "--version"',
+      ],
+    },
+  );
 });

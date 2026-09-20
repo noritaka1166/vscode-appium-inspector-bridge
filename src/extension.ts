@@ -6,6 +6,7 @@ import { ConnectionMonitor, probeServer, serverKey } from './connection';
 import { capabilitiesFor, type DeviceReport, listDevices } from './devices';
 import {
   checkEnvironment,
+  commandInvocation,
   type EnvironmentReport,
   resolveAppiumExecutable,
   resolveNpmExecutable,
@@ -791,8 +792,13 @@ async function installOfficialPlugin(): Promise<void> {
   }
   output.show(true);
   const appium = await resolveAppiumExecutable();
+  const invocation = commandInvocation(appium, [
+    'plugin',
+    'install',
+    'inspector',
+  ]);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(appium, ['plugin', 'install', 'inspector'], {
+    const child = spawn(invocation.command, invocation.args, {
       shell: false,
     });
     child.stdout.on('data', (data) => output.append(data.toString()));
@@ -830,7 +836,8 @@ async function runCommand(
   await new Promise<void>((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(command, args, { shell: false });
+      const invocation = commandInvocation(command, args);
+      child = spawn(invocation.command, invocation.args, { shell: false });
     } catch (error) {
       reject(error);
       return;

@@ -24,7 +24,7 @@
 - 公式Inspectorプラグイン（`appium plugin install inspector`）
 - ローカルHTTPサーバーへ接続できるデスクトップ版VS Code
 
-`appium` コマンドを実行できるPATHでVS Codeを起動してください。対応する接続先は `localhost`、`127.0.0.1`、`::1` です。Remote SSH、ブラウザー版VS Code、コンテナへの自動転送は対象外です。WindowsではAppiumを外部で起動してから **起動済みのInspectorを開く** を使用してください。
+`appium` コマンドを実行できるPATHでVS Codeを起動してください。対応する接続先は `localhost`、`127.0.0.1`、`::1` です。Remote SSH、ブラウザー版VS Code、コンテナへの自動転送は対象外です。Windowsの標準的なNode.js環境で使われる npm の `.cmd` ランチャーにも対応します。
 
 ## 使い方
 

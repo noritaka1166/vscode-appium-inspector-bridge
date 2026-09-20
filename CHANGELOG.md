@@ -19,6 +19,7 @@ Initial public release.
 - Persist approved Inspector settings per Server URL in VS Code SecretStorage.
 - Bridge copy and paste between VS Code and the embedded Inspector, including Selected Element values.
 - Support English and Japanese according to VS Code's display language.
+- Support the standard Windows Node.js `.cmd` launchers for environment checks, Appium startup, and Inspector plugin installation.
 - Require confirmation before stopping a managed server or reloading Inspector.
 
 ## 日本語
@@ -40,4 +41,5 @@ Initial public release.
 - Server URL単位で承認済みInspector設定をVS Code SecretStorageへ保存
 - Selected Elementを含む、VS Codeと埋め込みInspector間のコピー・貼り付け連携
 - VS Codeの表示言語に応じた日本語・英語対応
+- 環境チェック・Appium起動・Inspectorプラグイン導入で、Windows標準のNode.js `.cmd` ランチャーに対応
 - 管理中Serverの停止前の確認
