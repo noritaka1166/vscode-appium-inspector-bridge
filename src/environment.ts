@@ -213,7 +213,10 @@ export function createAppiumRunner(
           encoding: 'utf8',
         },
         (error, stdout, stderr) => {
-          if (error) reject(error);
+          if (error)
+            reject(
+              error instanceof Error ? error : new Error(JSON.stringify(error)),
+            );
           else resolve(`${stdout}${stderr}`.trim());
         },
       );
