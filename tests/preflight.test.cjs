@@ -4,14 +4,14 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 
 function setup({ trusted = true, reachable = false, canStart = false } = {}) {
-  let provider, checks = 0, spawns = 0, scans = 0, copied;
+  let provider, checks = 0, spawns = 0, scans = 0, copied, outputShows = 0;
   const events = [], requests = [];
   const report = { canStart, items: [{ name: 'Appium', status: canStart ? 'ok' : 'error', detail: 'test' }] };
   const vscode = {
     env: { clipboard: { writeText: async text => { copied = text; } } },
     workspace: { isTrusted: trusted },
     window: {
-      createOutputChannel: () => ({ appendLine() {} }),
+      createOutputChannel: () => ({ appendLine() {}, show() { outputShows++; } }),
       registerWebviewViewProvider: (_, p) => { provider = p; }
     },
     commands: { registerCommand() {} },
@@ -32,7 +32,7 @@ function setup({ trusted = true, reachable = false, canStart = false } = {}) {
   exports.activate({ extensionUri: 'extension', subscriptions: [] });
   const view = { cspSource: 'test:', asWebviewUri: x => x, postMessage: m => events.push(m), onDidReceiveMessage(cb) { this.receive = cb; } };
   provider.resolveWebviewView({ webview: view, onDidDispose() {} });
-  return { view, events, requests, checks: () => checks, spawns: () => spawns, scans: () => scans, copied: () => copied };
+  return { view, events, requests, checks: () => checks, spawns: () => spawns, scans: () => scans, copied: () => copied, outputShows: () => outputShows };
 }
 test('manual check posts results, replays them on ready, and clears loading', async () => {
   const host = setup();
@@ -84,4 +84,11 @@ test('device selection generates and copies only enumerated device capabilities'
   await host.view.receive({ type: 'copyCapabilities', deviceId: 'Android:test' });
   assert.equal(host.copied(), template);
   assert.equal(host.spawns(), 0);
+});
+test('showing logs does not leave the launcher loading', async () => {
+  const host = setup();
+  const loadingEvents = host.events.filter(event => event.type === 'loading').length;
+  await host.view.receive({ type: 'showOutput' });
+  assert.equal(host.outputShows(), 1);
+  assert.equal(host.events.filter(event => event.type === 'loading').length, loadingEvents);
 });

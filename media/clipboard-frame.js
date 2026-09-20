@@ -1,5 +1,8 @@
 (() => {
   const token = __BRIDGE_TOKEN__;
+  // VS Code normally supplies the parent Webview URL as referrer. Some hosts omit it;
+  // in that case, source + unguessable bridge token still authenticate replies.
+  const targetOrigin = document.referrer ? new URL(document.referrer).origin : '*';
   const writes = new Map();
   let sequence = 0;
   function writeText(text) {
@@ -7,7 +10,7 @@
       const id = ++sequence;
       const timer = setTimeout(() => { writes.delete(id); reject(new Error('クリップボード書き込みがタイムアウトしました。')); }, 5000);
       writes.set(id, { resolve, reject, timer });
-      parent.postMessage({ bridge: token, type: 'copyText', text: String(text), id }, '*');
+      parent.postMessage({ bridge: token, type: 'copyText', text: String(text), id }, targetOrigin);
     });
   }
   // Upstream Selected Element rows call this API, independently of keyboard events.
@@ -19,7 +22,7 @@
   let field = null;
   const editable = node => node instanceof HTMLTextAreaElement || (node instanceof HTMLInputElement && ['text', 'search', 'url', 'tel', 'password', 'email'].includes(node.type));
   document.addEventListener('focusin', event => { if (editable(event.target)) field = event.target; });
-  function notify(type, text) { parent.postMessage({ bridge: token, type, text }, '*'); }
+  function notify(type, text) { parent.postMessage({ bridge: token, type, text }, targetOrigin); }
   document.addEventListener('keydown', event => {
     if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
     if (event.key.toLowerCase() === 'v' && editable(event.target)) { event.preventDefault(); event.stopPropagation(); notify('paste'); }
@@ -32,7 +35,7 @@
     if (text) writeText(text).catch(error => notify('error', error.message));
   }
   window.addEventListener('message', event => {
-    if (event.source !== parent || event.data?.bridge !== token) return;
+    if (event.source !== parent || (targetOrigin !== '*' && event.origin !== targetOrigin) || event.data?.bridge !== token) return;
     if (event.data.type === 'copyResult') {
       const pending = writes.get(event.data.id);
       if (!pending) return;

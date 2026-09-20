@@ -1,5 +1,6 @@
 (() => {
   const config = __INSPECTOR_STORAGE__;
+  const parentOrigin = globalThis.document?.referrer ? new URL(globalThis.document.referrer).origin : '*';
   const keys = config.keys;
   const storage = window.localStorage;
   const proto = Storage.prototype;
@@ -26,12 +27,12 @@
         const value = storage.getItem(key);
         if (value !== null) values[key] = endpoint(key, value, location.port, config.upstreamPort);
       }
-      parent.postMessage({ bridge: config.token, type: 'saveSettings', values }, '*');
+      parent.postMessage({ bridge: config.token, type: 'saveSettings', values }, parentOrigin);
     }
     proto.setItem = function(key, value) { set.call(this, key, value); if (this === storage && keys.includes(String(key))) save(); };
     proto.removeItem = function(key) { remove.call(this, key); if (this === storage && keys.includes(String(key))) save(); };
     proto.clear = function() { clear.call(this); if (this === storage) save(); };
   } catch {
-    parent.postMessage({ bridge: config.token, type: 'error', text: 'Inspector の保存設定を復元できませんでした。' }, '*');
+    parent.postMessage({ bridge: config.token, type: 'error', text: 'Inspector の保存設定を復元できませんでした。' }, parentOrigin);
   }
 })();

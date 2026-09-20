@@ -1,4 +1,5 @@
 import { createServer, request } from 'node:http';
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 // A loopback-only relay injects the clipboard adapter without changing installed plugin files.

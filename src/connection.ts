@@ -1,17 +1,19 @@
-import { setTimeout, clearTimeout } from 'node:timers';
 import { inspectorUrl } from './official';
 
 export function serverKey(raw: string): string {
   inspectorUrl(raw);
   const url = new URL(raw);
   if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
-  return url.origin + url.pathname.replace(/\/+$/, '');
+  let pathname = url.pathname;
+  while (pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+  return url.origin + pathname;
 }
 export interface ConnectionState {
   url: string;
   status: 'checking' | 'connected' | 'disconnected';
   owner: 'managed' | 'external' | 'unknown';
 }
+
 
 export async function probeServer(url: string, request: typeof fetch = fetch): Promise<boolean> {
   try {
@@ -42,11 +44,16 @@ export class ConnectionMonitor {
     if (!this.state) return;
     const connected = await this.probe(this.state.url).catch(() => false);
     if (generation !== this.generation) return;
-    const owner = this.managed(this.state.url) ? 'managed' : connected ? 'external' : this.state.owner;
+    let owner = this.state.owner;
+    if (this.managed(this.state.url)) owner = 'managed';
+    else if (connected) owner = 'external';
     this.state = { ...this.state, status: connected ? 'connected' : 'disconnected', owner };
     this.publish({ ...this.state });
     this.timer = setTimeout(() => void this.poll(generation), this.interval);
-    this.timer.unref();
+    // Extension hosts run on Node.js. Do not keep VS Code or the test process alive
+    // solely for a background health check.
+    const timer = this.timer;
+    timer.unref?.();
   }
   dispose(): void { this.generation++; if (this.timer) clearTimeout(this.timer); }
 }

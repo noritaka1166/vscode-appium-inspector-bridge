@@ -19,10 +19,6 @@
   "categories": [
     "Testing"
   ],
-  "activationEvents": [
-    "onCommand:appiumInspector.open",
-    "onView:appiumInspector.sidebar"
-  ],
   "main": "./out/extension.js",
   "extensionKind": [
     "ui"
@@ -93,7 +89,7 @@
     "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^22.20.4",
     "@types/vscode": "^1.96.0",
     "@vscode/vsce": "^4.0.0",
     "typescript": "^5.7.2"

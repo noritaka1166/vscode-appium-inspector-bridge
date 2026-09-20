@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
+import { platform as nodePlatform } from 'node:process';
 
-export interface CheckItem {
+interface CheckItem {
   name: string;
   status: 'ok' | 'warning' | 'error' | 'skipped';
   detail: string;
@@ -9,15 +10,16 @@ export interface CheckItem {
 export interface EnvironmentReport { items: CheckItem[]; canStart: boolean }
 export type AppiumRunner = (args: string[]) => Promise<string>;
 
-// Same executable and inherited environment as the server launch; never use a shell.
-export const runAppium: AppiumRunner = args => new Promise((resolve, reject) => {
+const runAppium: AppiumRunner = args => new Promise((resolve, reject) => {
+  // Use the inherited environment, exactly as the server launcher does. Filtering
+  // writable PATH entries would hide standard nvm/Homebrew Appium installations.
   execFile('appium', args, { timeout: 15_000, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
     if (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      const detail = code === 'ENOENT'
-        ? 'appium コマンドが見つかりません。'
-        : error.killed ? '確認が15秒でタイムアウトしました。'
-        : `コマンドの実行に失敗しました: ${String(stderr || error.message).slice(0, 1500)}`;
+      const code = (error as { code?: string }).code;
+      let detail: string;
+      if (code === 'ENOENT') detail = 'appium コマンドが見つかりません。';
+      else if (error.killed) detail = '確認が15秒でタイムアウトしました。';
+      else detail = `コマンドの実行に失敗しました: ${String(stderr || error.message).slice(0, 1500)}`;
       reject(new Error(detail));
     } else resolve(stdout.trim());
   });
@@ -34,8 +36,8 @@ function installed(output: string): Record<string, { version: string; installed:
   return value as Record<string, { version: string; installed: boolean }>;
 }
 
-export async function checkEnvironment(run: AppiumRunner = runAppium, platform = process.platform): Promise<EnvironmentReport> {
-  const items: CheckItem[] = [];
+export async function checkEnvironment(run: AppiumRunner = runAppium, platform = nodePlatform): Promise<EnvironmentReport> {
+  let items: CheckItem[] = [];
   if (platform === 'win32') {
     return { canStart: false, items: [{ name: 'Appium CLI', status: 'error', detail: 'Windows の npm .cmd ランチャーからの起動・環境チェックは未対応です。', action: 'ターミナルで appium --use-plugins=inspector を起動し、「起動済みの Inspector を開く」を使用してください。' }] };
   }
@@ -48,7 +50,7 @@ export async function checkEnvironment(run: AppiumRunner = runAppium, platform =
     } else items.push({ name: 'Appium', status: 'ok', detail: version });
   } catch (error) {
     items.push({ name: 'Appium', status: 'error', detail: String(error instanceof Error ? error.message : error), action: 'ターミナルで appium --version を確認してください。未導入なら npm install -g appium@3 を実行し、PATH が通った環境から VS Code を再起動してください。' });
-    items.push({ name: 'Inspector プラグイン', status: 'skipped', detail: 'Appium CLI を確認できないため未確認です。' }, { name: 'ドライバー', status: 'skipped', detail: 'Appium CLI を確認できないため未確認です。' });
+    items = [...items, { name: 'Inspector プラグイン', status: 'skipped', detail: 'Appium CLI を確認できないため未確認です。' }, { name: 'ドライバー', status: 'skipped', detail: 'Appium CLI を確認できないため未確認です。' }];
     return { items, canStart: false };
   }
   const results = await Promise.all((['plugin', 'driver'] as const).map(async (kind): Promise<CheckItem> => {
@@ -68,6 +70,6 @@ export async function checkEnvironment(run: AppiumRunner = runAppium, platform =
       return { name, status: 'error', detail: `導入状況を確認できませんでした（未導入とは限りません）。\n${error instanceof Error ? error.message : String(error)}`, action: `ターミナルで appium ${kind} list --installed --json を実行し、PATH・APPIUM_HOME とそのアクセス権を確認してください。` };
     }
   }));
-  items.push(...results);
+  items = [...items, ...results];
   return { items, canStart: !items.some(item => item.status === 'error') };
 }

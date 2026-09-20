@@ -28,24 +28,26 @@ export function activate(context: vscode.ExtensionContext): void {
   secrets = context.secrets;
   connectionMonitor = new ConnectionMonitor(state => post({ type: 'connection', ...state }),
     url => Boolean(serverProcess) && managedServerUrl === url, url => probeServer(url, fetch));
-  context.subscriptions.push(connectionMonitor);
-  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.paste', async () => {
-    if (officialPanel?.active && clipboardRelay) {
-      await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
-    }
-  }));
-  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.copy', async () => {
-    if (officialPanel?.active && clipboardRelay) await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'copy' });
-  }));
   output = vscode.window.createOutputChannel('Appium Inspector Lite');
-  context.subscriptions.push(output);
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider(
-    'appiumInspector.sidebar',
-    new InspectorSidebarProvider(context.extensionUri),
-    { webviewOptions: { retainContextWhenHidden: true } }
-  ));
-  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.open', openInspector));
-  context.subscriptions.push(vscode.commands.registerCommand('appiumInspector.workspace', () => handleMessage({ type: 'openOfficial', serverUrl: officialServer })));
+  context.subscriptions.push(
+    connectionMonitor,
+    vscode.commands.registerCommand('appiumInspector.paste', async () => {
+      if (officialPanel?.active && clipboardRelay) {
+        await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
+      }
+    }),
+    vscode.commands.registerCommand('appiumInspector.copy', async () => {
+      if (officialPanel?.active && clipboardRelay) await officialPanel.webview.postMessage({ bridge: clipboardRelay.token, type: 'copy' });
+    }),
+    output,
+    vscode.window.registerWebviewViewProvider(
+      'appiumInspector.sidebar',
+      new InspectorSidebarProvider(context.extensionUri),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    ),
+    vscode.commands.registerCommand('appiumInspector.open', openInspector),
+    vscode.commands.registerCommand('appiumInspector.workspace', () => handleMessage({ type: 'openOfficial', serverUrl: officialServer }))
+  );
 }
 
 class InspectorSidebarProvider implements vscode.WebviewViewProvider {
@@ -76,83 +78,22 @@ type WebviewMessage =
   | { type: 'startOfficial' | 'openOfficial' | 'watchServer' | 'reconnect'; serverUrl: string }
   | { type: 'installOfficial' | 'checkEnvironment' | 'ready' | 'stopServer' | 'showOutput' };
 
+interface InspectorMessage {
+  bridge?: unknown;
+  type?: unknown;
+  values?: unknown;
+  text?: unknown;
+  id?: unknown;
+}
+
 async function handleMessage(message: WebviewMessage): Promise<void> {
-  if (message.type === 'watchServer') {
-    try { connectionMonitor.watch(message.serverUrl); }
-    catch { post({ type: 'connection', url: message.serverUrl, status: 'invalid', owner: 'unknown' }); }
-    return;
-  }
-  if (message.type === 'ready') {
-    postServerState();
-    if (environmentReport) post({ type: 'environment', report: environmentReport });
-    if (deviceReport) post({ type: 'devices', report: deviceReport });
-    post({ type: 'loading', active: busy });
-    return;
-  }
+  if (handlePassiveMessage(message)) return;
   if (busy) { return; }
   busy = true;
-  const loadingLabel = getLoadingLabel(message) ?? '処理しています…';
-  if (loadingLabel) {
-    post({ type: 'loading', active: true, label: loadingLabel });
-  }
+  const loadingLabel = getLoadingLabel(message);
+  if (loadingLabel) post({ type: 'loading', active: true, label: loadingLabel });
   try {
-    switch (message.type) {
-      case 'listDevices':
-        if (!vscode.workspace.isTrusted) throw new Error('端末一覧の取得には adb / xcrun を実行します。ワークスペースを信頼してから実行してください。');
-        deviceReport = await listDevices();
-        post({ type: 'devices', report: deviceReport });
-        break;
-      case 'deviceCapabilities':
-      case 'copyCapabilities': {
-        const device = deviceReport?.devices.find(item => item.id === message.deviceId);
-        if (!device) throw new Error('端末一覧を更新し、端末を選択してください。');
-        const text = capabilitiesFor(device);
-        post({ type: 'capabilitiesTemplate', text });
-        if (message.type === 'copyCapabilities') {
-          await vscode.env.clipboard.writeText(text);
-          post({ type: 'notice', level: 'success', text: 'Capabilities をコピーしました。公式InspectorのJSON編集欄に貼り付けてください。' });
-        }
-        break;
-      }
-      case 'reconnect': {
-        const url = serverKey(message.serverUrl);
-        connectionMonitor.watch(url);
-        if (!(await probeServer(url, fetch))) throw new Error('Appium Server に接続できません。拡張管理サーバーは「起動して公式 Inspector を開く」、外部サーバーは起動元で起動後に再接続してください。');
-        await openOfficial(message.serverUrl);
-        post({ type: 'notice', level: 'success', text: 'サーバーへの接続を確認しました。セッションは自動復元しません。画面の再読込が必要な場合はInspector上部の「再読込」を使用してください。' });
-        break;
-      }
-      case 'checkEnvironment':
-        await inspectEnvironment();
-        break;
-      case 'installOfficial':
-        if (serverProcess) { throw new Error('プラグインのインストール前に Server を停止してください。'); }
-        await installOfficialPlugin();
-        await inspectEnvironment();
-        post({ type: 'notice', level: 'success', text: '公式プラグインをインストールしました。「起動して公式 Inspector を開く」を押してください。' });
-        break;
-      case 'startOfficial':
-        inspectorUrl(message.serverUrl);
-        connectionMonitor.watch(message.serverUrl);
-        if (!(await isServerReachable(normaliseServerUrl(message.serverUrl)))) {
-          const report = await inspectEnvironment();
-          if (!report.canStart) throw new Error('起動前チェックで問題が見つかりました。環境チェック結果の対処方法を確認してください。');
-          post({ type: 'loading', active: true, label: 'Appium Server を起動しています…' });
-          await startServer(message.serverUrl);
-        }
-        await openOfficial(message.serverUrl);
-        break;
-      case 'openOfficial':
-        connectionMonitor.watch(message.serverUrl);
-        await openOfficial(message.serverUrl);
-        break;
-      case 'stopServer':
-        await stopServer();
-        break;
-      case 'showOutput':
-        output.show(true);
-        break;
-    }
+    await dispatchMessage(message);
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
     output.appendLine(text);
@@ -163,6 +104,78 @@ async function handleMessage(message: WebviewMessage): Promise<void> {
       post({ type: 'loading', active: false });
     }
   }
+}
+
+function handlePassiveMessage(message: WebviewMessage): boolean {
+  if (message.type === 'watchServer') {
+    try { connectionMonitor.watch(message.serverUrl); }
+    catch { post({ type: 'connection', url: message.serverUrl, status: 'invalid', owner: 'unknown' }); }
+    return true;
+  }
+  if (message.type !== 'ready') return false;
+  postServerState();
+  if (environmentReport) post({ type: 'environment', report: environmentReport });
+  if (deviceReport) post({ type: 'devices', report: deviceReport });
+  post({ type: 'loading', active: busy });
+  return true;
+}
+
+async function dispatchMessage(message: WebviewMessage): Promise<void> {
+  switch (message.type) {
+    case 'listDevices': return loadDevices();
+    case 'deviceCapabilities':
+    case 'copyCapabilities': return copyCapabilities(message);
+    case 'reconnect': return reconnect(message.serverUrl);
+    case 'checkEnvironment': return inspectEnvironment().then(() => undefined);
+    case 'installOfficial': return installOfficial();
+    case 'startOfficial': return startOfficial(message.serverUrl);
+    case 'openOfficial': connectionMonitor.watch(message.serverUrl); return openOfficial(message.serverUrl);
+    case 'stopServer': return stopServer();
+    case 'showOutput': output.show(true); return;
+  }
+}
+
+async function loadDevices(): Promise<void> {
+  if (!vscode.workspace.isTrusted) throw new Error('端末一覧の取得には adb / xcrun を実行します。ワークスペースを信頼してから実行してください。');
+  deviceReport = await listDevices();
+  post({ type: 'devices', report: deviceReport });
+}
+
+async function copyCapabilities(message: Extract<WebviewMessage, { type: 'deviceCapabilities' | 'copyCapabilities' }>): Promise<void> {
+  const device = deviceReport?.devices.find(item => item.id === message.deviceId);
+  if (!device) throw new Error('端末一覧を更新し、端末を選択してください。');
+  const text = capabilitiesFor(device);
+  post({ type: 'capabilitiesTemplate', text });
+  if (message.type === 'copyCapabilities') {
+    await vscode.env.clipboard.writeText(text);
+    post({ type: 'notice', level: 'success', text: 'Capabilities をコピーしました。公式InspectorのJSON編集欄に貼り付けてください。' });
+  }
+}
+
+async function reconnect(serverUrl: string): Promise<void> {
+  const url = serverKey(serverUrl);
+  connectionMonitor.watch(url);
+  if (!(await probeServer(url, fetch))) throw new Error('Appium Server に接続できません。拡張管理サーバーは「起動して公式 Inspector を開く」、外部サーバーは起動元で起動後に再接続してください。');
+  await openOfficial(serverUrl);
+  post({ type: 'notice', level: 'success', text: 'サーバーへの接続を確認しました。セッションは自動復元しません。画面の再読込が必要な場合はInspector上部の「再読込」を使用してください。' });
+}
+
+async function installOfficial(): Promise<void> {
+  if (serverProcess) throw new Error('プラグインのインストール前に Server を停止してください。');
+  await installOfficialPlugin();
+  await inspectEnvironment();
+  post({ type: 'notice', level: 'success', text: '公式プラグインをインストールしました。「起動して公式 Inspector を開く」を押してください。' });
+}
+
+async function startOfficial(serverUrl: string): Promise<void> {
+  inspectorUrl(serverUrl);
+  connectionMonitor.watch(serverUrl);
+  if (await isServerReachable(normaliseServerUrl(serverUrl))) return openOfficial(serverUrl);
+  const report = await inspectEnvironment();
+  if (!report.canStart) throw new Error('起動前チェックで問題が見つかりました。環境チェック結果の対処方法を確認してください。');
+  post({ type: 'loading', active: true, label: 'Appium Server を起動しています…' });
+  await startServer(serverUrl);
+  await openOfficial(serverUrl);
 }
 
 function getLoadingLabel(message: WebviewMessage): string | undefined {
@@ -187,6 +200,52 @@ async function inspectEnvironment(): Promise<EnvironmentReport> {
   return environmentReport;
 }
 
+async function handleInspectorReload(panel: vscode.WebviewPanel, relay: Awaited<ReturnType<typeof startInspectorProxy>>, state: { pending: boolean }): Promise<void> {
+  if (!panel.active || state.pending) return;
+  state.pending = true;
+  try {
+    const choice = await vscode.window.showWarningMessage('Inspector を再読み込みしますか？', {
+      modal: true,
+      detail: '未保存の Capabilities・操作状態が失われ、操作中のセッションとの接続が切れる可能性があります。再読込ではサーバー側のセッションは終了しません。必要な設定を保存し、公式UIでセッションを終了してから続行してください。'
+    }, '再読み込みする');
+    if (choice !== '再読み込みする' || officialPanel !== panel) return;
+    await settingsWrites;
+    if (officialPanel === panel) await panel.webview.postMessage({ bridge: relay.token, type: 'reloadConfirmed' });
+  } catch {
+    void vscode.window.showErrorMessage('Inspector を再読み込みできませんでした。');
+  } finally {
+    state.pending = false;
+  }
+}
+
+async function handleInspectorSettings(message: InspectorMessage, settingsKey: string, current: Record<string, string>): Promise<Record<string, string>> {
+  try {
+    const values = validateSettings(message.values);
+    const snapshot = JSON.stringify(values);
+    const write = settingsWrites.then(() => secrets.store(settingsKey, snapshot));
+    settingsWrites = write.catch(() => undefined);
+    await write;
+    return values;
+  } catch {
+    void vscode.window.showErrorMessage('Inspector の保存設定が不正、またはサイズ上限（5 MB）を超えています。');
+    return current;
+  }
+}
+
+async function handleInspectorClipboard(message: InspectorMessage, panel: vscode.WebviewPanel, relay: Awaited<ReturnType<typeof startInspectorProxy>>): Promise<void> {
+  try {
+    if (message.type === 'paste') await panel.webview.postMessage({ bridge: relay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
+    if (message.type === 'copyText' && typeof message.text === 'string') {
+      await vscode.env.clipboard.writeText(message.text);
+      await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id });
+    }
+    if (message.type === 'error' && typeof message.text === 'string') void vscode.window.showWarningMessage(message.text);
+  } catch {
+    if (message.type === 'copyText') await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id, error: 'クリップボードへコピーできませんでした。' });
+    void vscode.window.showErrorMessage('クリップボードを操作できませんでした。');
+  }
+}
+
 async function openOfficial(rawUrl: string): Promise<void> {
   const url = inspectorUrl(rawUrl);
   let response: Response;
@@ -209,56 +268,24 @@ async function openOfficial(rawUrl: string): Promise<void> {
   const saved = await secrets.get(settingsKey);
   let values = saved ? validateSettings(JSON.parse(saved)) : {};
   const relay = await startInspectorProxy(url, adapter, token => storageAdapter.replace('__INSPECTOR_STORAGE__', () =>
-    JSON.stringify({ token, keys: settingKeys, values, upstreamPort: url.port || '80' }).replace(/</g, '\\u003c')));
+    JSON.stringify({ token, keys: settingKeys, values, upstreamPort: url.port || '80' }).replaceAll('<', String.raw`\u003c`)));
   clipboardRelay = relay;
   const panel = vscode.window.createWebviewPanel('appiumInspector.official', `Appium Inspector · ${url.host}`, vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
   officialPanel = panel;
-  let reloadPending = false;
-  panel.webview.onDidReceiveMessage(async message => {
-    if (message?.bridge !== relay.token) return;
+  const reloadState = { pending: false };
+  panel.webview.onDidReceiveMessage(async (message: InspectorMessage) => {
+    if (!message || message.bridge !== relay.token) return;
     if (message.type === 'requestReload') {
-      if (!panel.active || reloadPending) return;
-      reloadPending = true;
-      try {
-        const choice = await vscode.window.showWarningMessage('Inspector を再読み込みしますか？', {
-          modal: true,
-          detail: '未保存の Capabilities・操作状態が失われ、操作中のセッションとの接続が切れる可能性があります。再読込ではサーバー側のセッションは終了しません。必要な設定を保存し、公式UIでセッションを終了してから続行してください。'
-        }, '再読み込みする');
-        if (choice === '再読み込みする' && officialPanel === panel) {
-          await settingsWrites;
-          if (officialPanel === panel) await panel.webview.postMessage({ bridge: relay.token, type: 'reloadConfirmed' });
-        }
-      } catch {
-        void vscode.window.showErrorMessage('Inspector を再読み込みできませんでした。');
-      } finally { reloadPending = false; }
+      await handleInspectorReload(panel, relay, reloadState);
       return;
     }
     if (message.type === 'saveSettings') {
-      try {
-        values = validateSettings(message.values);
-        const snapshot = JSON.stringify(values);
-        settingsWrites = settingsWrites.then(() => secrets.store(settingsKey, snapshot)).catch(() => {
-          void vscode.window.showErrorMessage('Inspector の設定を保存できませんでした。保存操作をやり直してください。');
-        });
-        await settingsWrites;
-      } catch {
-        void vscode.window.showErrorMessage('Inspector の保存設定が不正、またはサイズ上限（5 MB）を超えています。');
-      }
+      values = await handleInspectorSettings(message, settingsKey, values);
       return;
     }
     if (!panel.active) return;
-    try {
-      if (message.type === 'paste') await panel.webview.postMessage({ bridge: relay.token, type: 'pasteText', text: await vscode.env.clipboard.readText() });
-      if (message.type === 'copyText' && typeof message.text === 'string') {
-        await vscode.env.clipboard.writeText(message.text);
-        await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id });
-      }
-      if (message.type === 'error' && typeof message.text === 'string') void vscode.window.showWarningMessage(message.text);
-    } catch {
-      if (message.type === 'copyText') await panel.webview.postMessage({ bridge: relay.token, type: 'copyResult', id: message.id, error: 'クリップボードへコピーできませんでした。' });
-      void vscode.window.showErrorMessage('クリップボードを操作できませんでした。');
-    }
+    await handleInspectorClipboard(message, panel, relay);
   });
   panel.webview.html = officialHtml(relay.url, relay.token);
   panel.onDidDispose(() => { relay.close(); clipboardRelay = undefined; officialPanel = undefined; });
@@ -269,8 +296,8 @@ async function installOfficialPlugin(): Promise<void> {
   output.show(true);
   await new Promise<void>((resolve, reject) => {
     const child = spawn('appium', ['plugin', 'install', 'inspector'], { shell: false });
-    child.stdout.on('data', (data: Buffer) => output.append(data.toString()));
-    child.stderr.on('data', (data: Buffer) => output.append(data.toString()));
+    child.stdout.on('data', data => output.append(data.toString()));
+    child.stderr.on('data', data => output.append(data.toString()));
     child.once('error', (error) => reject(new Error(`Appium を実行できません: ${error.message}`)));
     child.once('close', code => code === 0 ? resolve() : reject(new Error('プラグイン導入に失敗しました。ログを確認してください。導入済みの場合はそのまま起動できます。')));
   });
@@ -294,19 +321,19 @@ async function startServer(rawServerUrl: string): Promise<void> {
   const port = url.port || '4723';
   const address = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname.replace(/^\[|\]$/g, '');
   const basePath = url.pathname.replace(/\/$/, '');
-  const args = ['--address', address, '--port', port];
-  args.push('--use-plugins=inspector');
-  if (basePath && basePath !== '/') {
-    args.push('--base-path', basePath);
-  }
+  const args = [
+    '--address', address, '--port', port,
+    '--use-plugins=inspector',
+    ...(basePath && basePath !== '/' ? ['--base-path', basePath] : [])
+  ];
 
   output.appendLine(`Appium Server を起動します: appium ${args.join(' ')}`);
   const child = spawn('appium', args, { shell: false });
   serverProcess = child;
   managedServerUrl = serverKey(serverUrl);
-  child.stdout.on('data', (data: Buffer) => output.append(data.toString()));
-  child.stderr.on('data', (data: Buffer) => output.append(data.toString()));
-  child.on('error', (error: NodeJS.ErrnoException) => {
+  child.stdout.on('data', data => output.append(data.toString()));
+  child.stderr.on('data', data => output.append(data.toString()));
+  child.on('error', (error: Error & { code?: string }) => {
     if (serverProcess === child) {
       serverProcess = undefined;
       postServerState();
@@ -392,7 +419,8 @@ async function waitForServer(serverUrl: string, child: ChildProcessWithoutNullSt
 }
 
 function normaliseServerUrl(value: string): string {
-  const url = value.trim().replace(/\/+$/, '');
+  let url = value.trim();
+  while (url.endsWith('/')) url = url.slice(0, -1);
   if (!/^https?:\/\//i.test(url)) {
     throw new Error('Appium Server URL は http:// または https:// で始めてください。');
   }
