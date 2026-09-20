@@ -42,6 +42,7 @@ $('check-environment').onclick = () => send('checkEnvironment');
 $('list-devices').onclick = () => send('listDevices');
 $('list-sessions').onclick = () => send('listSessions');
 $('device-select').onchange = () => {
+  resetCopyFeedback();
   $('device-caps').value = '';
   $('copy-caps').disabled = true;
   if ($('device-select').value)
@@ -49,6 +50,14 @@ $('device-select').onchange = () => {
 };
 $('copy-caps').onclick = () =>
   send('copyCapabilities', { deviceId: $('device-select').value });
+let copyResetTimer;
+function resetCopyFeedback() {
+  const button = $('copy-caps');
+  clearTimeout(copyResetTimer);
+  if (button.dataset.defaultLabel)
+    button.textContent = button.dataset.defaultLabel;
+  delete button.dataset.copied;
+}
 function showDevices(data) {
   const select = $('device-select');
   select.replaceChildren();
@@ -71,8 +80,21 @@ function showDevices(data) {
 }
 
 function showCapabilities(data) {
+  resetCopyFeedback();
   $('device-caps').value = data.text;
   $('copy-caps').disabled = false;
+}
+
+function showCopied() {
+  const button = $('copy-caps');
+  resetCopyFeedback();
+  button.dataset.defaultLabel ??= button.textContent;
+  button.textContent = text.copied;
+  button.dataset.copied = 'true';
+  copyResetTimer = setTimeout(() => {
+    button.textContent = button.dataset.defaultLabel;
+    delete button.dataset.copied;
+  }, 2200);
 }
 
 function showSessions(data) {
@@ -179,6 +201,7 @@ const messageHandlers = {
   devices: showDevices,
   sessions: showSessions,
   capabilitiesTemplate: showCapabilities,
+  capabilitiesCopied: showCopied,
   connection: showConnection,
   environment: showEnvironment,
   loading: showLoading,

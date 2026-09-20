@@ -26,6 +26,7 @@ export interface UiText {
   showDriverGuide: string;
   noSessions: string;
   attach: string;
+  copied: string;
 }
 const japanese = (language?: string): boolean =>
   language?.toLowerCase().startsWith('ja') ?? false;
@@ -56,6 +57,7 @@ export function webviewText(language?: string): UiText {
         showDriverGuide: 'ドライバーの導入方法を表示',
         noSessions: '起動中セッションはありません',
         attach: 'Attach',
+        copied: '✓ コピーしました',
       }
     : {
         selectDevice: 'Select a device',
@@ -81,6 +83,7 @@ export function webviewText(language?: string): UiText {
         showDriverGuide: 'Show driver installation options',
         noSessions: 'No running sessions found',
         attach: 'Attach',
+        copied: '✓ Copied',
       };
 }
 

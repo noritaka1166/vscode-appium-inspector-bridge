@@ -291,6 +291,7 @@ async function copyCapabilities(
   post({ type: 'capabilitiesTemplate', text });
   if (message.type === 'copyCapabilities') {
     await vscode.env.clipboard.writeText(text);
+    post({ type: 'capabilitiesCopied' });
     post({
       type: 'notice',
       level: 'success',

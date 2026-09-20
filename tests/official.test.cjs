@@ -55,6 +55,7 @@ test('attach requests are sent only after the Inspector iframe loads', () => {
 test('webviews follow the VS Code display language', () => {
   assert.equal(webviewText('en').connected, 'Connected');
   assert.equal(webviewText('ja').connected, '接続中');
+  assert.equal(webviewText('en').copied, '✓ Copied');
   assert.match(
     launcherHtml('launcher.js', 'launcher.css', 'test:', 'en'),
     /Start and Open a New Inspector Tab/,
