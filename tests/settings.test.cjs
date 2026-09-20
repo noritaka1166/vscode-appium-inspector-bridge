@@ -13,7 +13,7 @@ function frame(values, port) {
     clear() { this.data.clear(); }
   }
   const localStorage = new Storage(), messages = [];
-  vm.runInNewContext(fs.readFileSync('media/storage-frame.js', 'utf8').replace('__INSPECTOR_STORAGE__', JSON.stringify({ values, keys: settingKeys, token: 'test', upstreamPort: '4723' })), {
+  vm.runInNewContext(fs.readFileSync('media/storage-frame.js', 'utf8').replace('__INSPECTOR_STORAGE__', JSON.stringify({ values, keys: settingKeys, token: 'test', upstreamPort: '4723' })).replace('__BRIDGE_LANGUAGE__', '"ja"'), {
     Storage, window: { localStorage }, location: { port }, parent: { postMessage: m => messages.push(m) }
   });
   return { localStorage, messages, Storage };

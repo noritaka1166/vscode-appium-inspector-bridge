@@ -1,5 +1,8 @@
 (() => {
   const config = __INSPECTOR_STORAGE__;
+  const restoreError = __BRIDGE_LANGUAGE__ === 'ja'
+    ? 'Inspector の保存設定を復元できませんでした。'
+    : 'Could not restore saved Inspector settings.';
   const parentOrigin = globalThis.document?.referrer ? new URL(globalThis.document.referrer).origin : '*';
   const keys = config.keys;
   const storage = window.localStorage;
@@ -33,6 +36,6 @@
     proto.removeItem = function(key) { remove.call(this, key); if (this === storage && keys.includes(String(key))) save(); };
     proto.clear = function() { clear.call(this); if (this === storage) save(); };
   } catch {
-    parent.postMessage({ bridge: config.token, type: 'error', text: 'Inspector の保存設定を復元できませんでした。' }, parentOrigin);
+    parent.postMessage({ bridge: config.token, type: 'error', text: restoreError }, parentOrigin);
   }
 })();

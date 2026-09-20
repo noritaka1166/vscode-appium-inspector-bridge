@@ -1,5 +1,6 @@
 const vscode = acquireVsCodeApi();
 const $ = id => document.getElementById(id);
+const text = window.appiumInspectorText || { selectDevice: 'Select a device', noDevices: 'No selectable devices found', checking: 'Checking', connected: 'Connected', disconnected: 'Disconnected', invalidUrl: 'Check the URL (local HTTP only)', managed: 'Extension-managed', external: 'External', unknown: 'Unknown origin', verified: 'Verified', warning: 'Warning', actionRequired: 'Action required', notChecked: 'Not checked', working: 'Working…', managedProcess: 'Extension-managed process', running: 'Running', stopped: 'Stopped' };
 const previous = vscode.getState();
 if (previous?.serverUrl) $('server-url').value = previous.serverUrl;
 $('server-url').onchange = () => { vscode.setState({ serverUrl: $('server-url').value }); send('watchServer'); };
@@ -23,7 +24,7 @@ function showDevices(data) {
   select.replaceChildren();
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = data.report.devices.length ? '端末を選択してください' : '選択できる端末がありません';
+  placeholder.textContent = data.report.devices.length ? text.selectDevice : text.noDevices;
   select.append(placeholder);
   for (const device of data.report.devices) {
     const option = document.createElement('option');
@@ -43,8 +44,8 @@ function showCapabilities(data) {
 }
 
 function showConnection(data) {
-  const status = { checking: '確認中', connected: '接続中', disconnected: '切断', invalid: 'URLを確認してください（ローカルHTTPのみ対応）' };
-  const owner = { managed: '拡張管理', external: '外部起動', unknown: '起動元未確認' };
+  const status = { checking: text.checking, connected: text.connected, disconnected: text.disconnected, invalid: text.invalidUrl };
+  const owner = { managed: text.managed, external: text.external, unknown: text.unknown };
   $('connection-state').textContent = `${status[data.status]}（${owner[data.owner]}）\n${data.url}`;
   $('connection-state').dataset.status = data.status;
 }
@@ -52,7 +53,7 @@ function showConnection(data) {
 function showEnvironment(data) {
   const results = $('environment-results');
   results.replaceChildren();
-  const labels = { ok: '確認済み', warning: '注意', error: '要対応', skipped: '未確認' };
+  const labels = { ok: text.verified, warning: text.warning, error: text.actionRequired, skipped: text.notChecked };
   for (const item of data.report.items) {
     const row = document.createElement('section');
     row.dataset.status = item.status;
@@ -74,12 +75,12 @@ function showEnvironment(data) {
 
 function showLoading(data) {
   $('loading').hidden = !data.active;
-  $('loading-label').textContent = data.label || '処理しています…';
+  $('loading-label').textContent = data.label || text.working;
   document.querySelector('main').inert = data.active;
 }
 
 function showServer(data) {
-  $('server-state').textContent = `拡張管理プロセス: ${data.running ? '起動中 — ' + data.url : '停止中'}`;
+  $('server-state').textContent = `${text.managedProcess}: ${data.running ? text.running + ' — ' + data.url : text.stopped}`;
   $('stop').disabled = !data.running;
 }
 

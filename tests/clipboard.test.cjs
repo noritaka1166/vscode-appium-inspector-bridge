@@ -16,7 +16,7 @@ test('clipboard adapter replaces selection and emits input for React; rejects fo
   Object.assign(field, { value: '{}', selectionStart: 0, selectionEnd: 2, isConnected: true });
   const parent = { postMessage: m => messages.push(m) };
   const window = { addEventListener: (name, cb) => { listeners[name] = cb; } };
-  vm.runInNewContext(fs.readFileSync('media/clipboard-frame.js', 'utf8').replace('__BRIDGE_TOKEN__', '"test-token"'), {
+  vm.runInNewContext(fs.readFileSync('media/clipboard-frame.js', 'utf8').replace('__BRIDGE_TOKEN__', '"test-token"').replace('__BRIDGE_LANGUAGE__', '"ja"'), {
     window, parent, navigator: {}, setTimeout, clearTimeout, HTMLTextAreaElement: Field, HTMLInputElement: class {}, Event: class { constructor(type) { this.type = type; } },
     document: { addEventListener: (name, cb) => { docListeners[name] = cb; }, activeElement: field }
   });
@@ -37,7 +37,7 @@ test('upstream writeText resolves only after host acknowledgement and propagates
   const messages = [], listeners = {};
   const navigator = { clipboard: {} };
   const parent = { postMessage: message => messages.push(message) };
-  vm.runInNewContext(fs.readFileSync('media/clipboard-frame.js', 'utf8').replace('__BRIDGE_TOKEN__', '"copy-token"'), {
+  vm.runInNewContext(fs.readFileSync('media/clipboard-frame.js', 'utf8').replace('__BRIDGE_TOKEN__', '"copy-token"').replace('__BRIDGE_LANGUAGE__', '"ja"'), {
     navigator, parent, setTimeout, clearTimeout,
     window: { addEventListener: (name, callback) => { listeners[name] = callback; } },
     document: { addEventListener() {} }

@@ -1,8 +1,8 @@
 {
   "name": "appium-inspector-lite",
-  "displayName": "Appium Inspector Lite",
-  "description": "Inspect and interact with Appium sessions without leaving VS Code.",
-  "version": "0.3.8",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.3.9",
   "publisher": "noritaka1166",
   "license": "MIT",
   "repository": {
@@ -28,7 +28,7 @@
       "activitybar": [
         {
           "id": "appiumInspector",
-          "title": "Appium Inspector",
+          "title": "%viewsContainer.title%",
           "icon": "media/icon.svg"
         }
       ]
@@ -38,26 +38,26 @@
         {
           "type": "webview",
           "id": "appiumInspector.sidebar",
-          "name": "Inspector"
+          "name": "%view.inspector.name%"
         }
       ]
     },
     "commands": [
       {
         "command": "appiumInspector.paste",
-        "title": "Appium Inspector: Paste"
+        "title": "%command.paste.title%"
       },
       {
         "command": "appiumInspector.copy",
-        "title": "Appium Inspector: Copy"
+        "title": "%command.copy.title%"
       },
       {
         "command": "appiumInspector.workspace",
-        "title": "Appium Inspector: Open Workspace"
+        "title": "%command.workspace.title%"
       },
       {
         "command": "appiumInspector.open",
-        "title": "Appium Inspector: Open"
+        "title": "%command.open.title%"
       }
     ],
     "keybindings": [

@@ -1,0 +1,10 @@
+{
+  "extension.displayName": "Appium Inspector Lite",
+  "extension.description": "Use the official Appium Inspector web UI without leaving VS Code.",
+  "viewsContainer.title": "Appium Inspector",
+  "view.inspector.name": "Inspector",
+  "command.paste.title": "Appium Inspector: Paste",
+  "command.copy.title": "Appium Inspector: Copy",
+  "command.workspace.title": "Appium Inspector: Open Workspace",
+  "command.open.title": "Appium Inspector: Open"
+}

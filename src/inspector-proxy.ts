@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 // A loopback-only relay injects the clipboard adapter without changing installed plugin files.
-export async function startInspectorProxy(upstream: URL, adapter: string, bootstrap?: (token: string) => string): Promise<{ url: URL; token: string; close(): void }> {
+export async function startInspectorProxy(upstream: URL, adapter: string, bootstrap?: (token: string) => string, unavailableMessage = 'Could not connect to Appium Server.'): Promise<{ url: URL; token: string; close(): void }> {
   const token = randomUUID();
   const server = createServer((req, res) => {
     const address = server.address();
@@ -34,7 +34,7 @@ export async function startInspectorProxy(upstream: URL, adapter: string, bootst
         });
       } else { res.writeHead(incoming.statusCode || 502, responseHeaders); incoming.pipe(res); }
     });
-    forward.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end('Appium Server に接続できません。'); });
+    forward.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(unavailableMessage); });
     forward.setTimeout(180000, () => forward.destroy());
     req.on('aborted', () => forward.destroy());
     req.pipe(forward);

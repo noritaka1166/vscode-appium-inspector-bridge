@@ -1,81 +1,57 @@
 # Appium Inspector Lite
 
-公式 Appium Inspector プラグインの Web UI を、VS Code のエディタータブ内で使う非公式の拡張です。v0.3.3から独自の簡易UIを廃止し、公式UIに一本化しています。
+[日本語版 README](README.ja.md)
 
-## 公式 Inspector の使い方
+An unofficial VS Code extension that embeds the official Appium Inspector web UI in an editor tab. Since v0.3.3, it uses the official Inspector UI exclusively instead of maintaining a separate lightweight inspector.
 
-1. ローカルに Appium 3 と対象ドライバーを用意します。
-2. Activity Bar の Appium Inspector を開きます。
-3. 初回は「初回セットアップ」→「公式プラグインをインストール」を押します（`appium plugin install inspector` を現在の Appium 環境で実行）。
-4. 「起動して公式 Inspector を開く」を押します。サーバーを `--use-plugins=inspector` 付きで起動し、`/inspector` をエディター領域に表示します。
-5. Capabilities、セッション開始／終了、Source、Commands、Gestures、Recorderは公式UIで操作します。
+## Features
 
-既存サーバーにも「起動済みの Inspector を開く」で接続できます。プラグイン無しで起動済みの場合は、停止してからプラグイン有効で再起動してください。`/wd/hub` 等のbase pathがあってもUIは `/inspector` にあります。公式画面側のServer Detailsには実際のAppium base pathを設定してください。
+- Open the official Appium Inspector plugin inside VS Code.
+- Install the Inspector plugin, start or stop a local Appium Server, and view its logs.
+- Check the local Appium version, Inspector plugin, and installed drivers before starting a server.
+- Show connection status and reconnect without creating a new session.
+- List Android devices and iOS simulators, then generate a capability JSON template.
+- Persist official Inspector capability sets, connection details, theme, language, and saved gestures in VS Code SecretStorage.
+- Bridge copy and paste between the official Inspector iframe and VS Code, including Selected Element values.
+- Show the extension UI in English or Japanese according to the VS Code display language.
 
-VS CodeデスクトップのローカルHTTP接続（localhost / 127.0.0.1 / ::1）を対象としています。Remote SSH / コンテナ内への自動転送、vscode.devは対象外です。Appiumを実行できるPATHでVS Codeを起動してください。Windowsのnpm `.cmd` ランチャーによる起動は未対応で、外部でサーバーを起動して接続してください。
+## Requirements
 
-公式UIのセッションは公式UIで管理されます。タブを閉じるだけではセッションは終了しません。Server停止・VS Code終了の前に公式UIのセッション終了操作を行ってください。
+- Appium 3 and the driver required by your target platform.
+- The official Appium Inspector plugin: `appium plugin install inspector`.
+- A desktop VS Code instance that can reach a local HTTP server (`localhost`, `127.0.0.1`, or `::1`). Remote SSH, browser VS Code, and automatic container forwarding are not supported.
 
-Inspector本体はVSIXに同梱せず、インストールした公式プラグインから配信します。表示機能はプラグインのバージョンに従います。ブラウザー版のためElectron専用のメニュー・OS連携は含まれず、クリップボードやダウンロードの可否はWebviewの制約を受けます。
+Start VS Code from an environment where `appium` is available on `PATH`. On Windows, start Appium externally and use **Open Running Inspector** because npm `.cmd` launcher support is unavailable.
 
-参照: [公式プラグイン](https://github.com/appium/appium-inspector/tree/main/plugins) / [導入手順](https://appium.github.io/appium-inspector/latest/quickstart/installation/)。本拡張はAppiumチームの公式製品ではありません。公式プラグインはApache-2.0、本拡張のコードはMITです。
+## Quick start
 
-## macOS のコピー・貼り付け
+1. Open **Appium Inspector** from the Activity Bar, or press `⌘⌥A` (`Ctrl+Alt+A` on Windows/Linux).
+2. Under **Initial Setup**, select **Install Official Plugin** if needed.
+3. Select **Start and Open Official Inspector**. The extension starts Appium with `--use-plugins=inspector` and opens `/inspector` in an editor tab.
+4. Configure capabilities and create or end sessions in the official Inspector UI.
 
-v0.3.2ではSelected Elementの属性・locator行など、公式UIが `navigator.clipboard.writeText()` で行うコピーもVS Code経由に変更しました。クリップボードへの書き込みが完了してから公式UIへ完了を返します。
+To use an existing server, select **Open Running Inspector**. If the server was started without the plugin, stop it at its original source and restart it with `--use-plugins=inspector`. The Inspector UI is always at `/inspector`, even when Appium uses a base path such as `/wd/hub`; configure that real base path in the official Inspector's Server Details.
 
-v0.3.1でVS Code内のiframeに対するクリップボード仲介を追加しました。JSONの鉛筆アイコンを押し、入力欄をクリックしてから `⌘V` を使えます。ショートカットが他の拡張に奪われる場合は、タブ上部の「全選択」「貼り付け」を使ってください。「コピー」ボタンも使用できます。
+## Devices and capabilities
 
-公式プラグインのファイルは変更せず、一時的なローカル中継を経由して表示します。公式画面のRemote Portには中継ポートが自動設定されます。タブを閉じると中継が停止するため、先にセッションを終了してください。
+Open **Devices & Capabilities** and select **Refresh Devices**. The extension lists ready Android devices and available iOS simulators, then generates a JSON template with `platformName`, `appium:automationName`, `appium:udid`, and `appium:deviceName`.
 
-## 端末一覧・Capabilitiesのひな形
+Copy the template and paste it into the official Inspector JSON Representation editor. Add the target application details as needed:
 
-サイドバーの「端末・Capabilities」→「端末一覧を更新」で、ローカルのAndroid実機・エミュレーターとiOSシミュレーターを表示します。端末を選ぶと `platformName`・`appium:automationName`・`appium:udid`・`appium:deviceName` を含むJSONを生成します。
+- Android: `appium:app`, `appium:appPackage`, and `appium:appActivity`
+- iOS: `appium:app` or `appium:bundleId`
 
-「JSONをコピー」を押し、公式InspectorのJSON Representationの鉛筆を押して全選択・貼り付けしてください。対象アプリに応じて `appium:app`、Androidの `appium:appPackage` / `appium:appActivity`、iOSの `appium:bundleId` を追加します。保存は公式UIの「Save As」を使用してください。
+Android uses `adb devices -l`; configure `PATH`, `ANDROID_HOME`, or `ANDROID_SDK_ROOT` if needed. iOS simulator listing uses `xcrun simctl` on macOS. No device is started and no application is installed by this feature.
 
-- Androidは `adb devices -l` を使用。SDK Platform-ToolsのPATH、または `ANDROID_HOME` / `ANDROID_SDK_ROOT` が必要です。未認証・offline・権限不足の端末は選択対象にせず、対処方法を表示します。adbデーモンが未起動の場合は、adb自身が起動することがあります。
-- iOSはmacOS上の `xcrun simctl list devices available --json` を使用。XcodeとSimulatorランタイムが必要です。停止中のシミュレーターも一覧表示しますが、一覧取得・JSON生成では起動しません。iOS実機は対象外です。
-- 信頼済みワークスペースでのみコマンドを実行します。片方の環境で取得に失敗しても、もう片方の結果は表示します。
-- 一覧は手動更新です。端末状態が変わったら更新してください。ドライバー導入、アプリのインストール、セッション開始は行いません。
+## Settings and safety
 
-## 接続状態・再接続
+The official Inspector's saved capability sets, preferences, saved gestures, and server details are saved per Server URL in VS Code SecretStorage. Save capability sets with **Save As** in the official UI, then select them from **Saved Capability Sets** later. Unsaved edits and active sessions are not restored.
 
-サイドバーのServer URLに対し、約5秒間隔（応答待ち最大2秒）で `/status` を確認し、「確認中／接続中／切断」を表示します。base pathにも対応します。これはサーバーへの到達確認であり、セッションや端末の動作保証ではありません。
+Stopping a server or reloading Inspector requires confirmation. Reloading does not end the server-side session; save what you need and end the session in the official UI first. The connection monitor only checks server reachability and does not guarantee device or session health.
 
-- 「拡張管理」はこの拡張が起動したプロセス、「外部起動」は拡張が管理していない応答中のサーバーです。切断時は最後に確認した起動元を表示し、一度も確認できていない場合は「起動元未確認」と表示します。
-- 「再接続」はサーバーとInspectorの応答を再確認して既存タブを表示します。タブがなければ開きます。サーバーの再起動・セッション作成・画面の自動再読込はしません。
-- 切断したサーバーを起動してから再接続してください。画面の再読込が必要な場合はInspector上部の「再読込」を使用します。終了済みセッションは復元できません。
-- 「Server 停止」は拡張が起動したプロセスのみが対象です。停止対象のURLは「拡張管理プロセス」の行に表示します。外部起動のサーバーは起動元で停止してください。
-- サイドバーが破棄されたとき、または拡張が終了したときに監視を解除します。
+The extension does not bundle Appium Inspector. Its available features follow the installed official plugin version. This is not an Appium team product. The official plugin is Apache-2.0; this extension is MIT licensed.
 
-## 停止・再読込の確認
-
-サイドバーの「Server 停止」とInspectorタブ上部の「再読込」は、VS Codeの確認ダイアログで続行を選んだ場合のみ実行します。キャンセルやダイアログを閉じた場合は変更しません。セッションの有無は判定せず、毎回確認します。
-
-停止はそのサーバー上のすべてのセッションに影響します。再読込では未保存の編集・操作状態を失う可能性があり、サーバー側のセッションは自動終了しません。必要な設定を保存し、公式UIでセッションを終了してから続行してください。この確認は拡張のボタン操作が対象で、タブを閉じる・VS Codeを終了する操作には適用されません。
-
-## 起動前の環境チェック
-
-サイドバーの「環境チェック」で、VS Code が使用する Appium のバージョン、Inspector プラグイン、導入済みドライバーを確認できます。不足・確認失敗の場合は対処方法を表示し、詳細を「ログ」に出力します。
-
-- ローカルサーバーを新規起動する前にも自動チェックします。Appium・Inspector が不足している場合や確認に失敗した場合は起動を止めます。
-- ドライバー未導入は警告です。Inspector は開けますが、セッション開始には対象ドライバーを導入してください。Android は `appium driver install uiautomator2`、iOS は macOS 上で `appium driver install xcuitest` が例です。
-- チェックは導入状況のみです。SDK・端末接続・ドライバーとOSの互換性までは検証しません。必要な変更やインストールを勝手に行うことはありません。
-- 起動済みサーバーに接続する場合はローカルCLIチェックを省略します。外部サーバーが使用する Appium 環境は、その起動元で確認してください。
-- チェックには信頼済みワークスペースが必要です。各コマンドは15秒でタイムアウトします。権限エラーでは `APPIUM_HOME` の場所・アクセス権、コマンド未検出ではPATHを確認してください。
-
-## Capabilities・設定の保存
-
-v0.3.4から、公式UIの「Save As」で保存したCapability Sets、テーマ・言語、保存済みジェスチャー、接続設定などをVS CodeのSecretStorageにも保存します。同じServer URLで開き直すと、中継ポートの変更やVS Codeの再起動後も、公式UIの起動前に復元します。保存済み接続先の中継ポートも更新します。
-
-- Capabilitiesは「Save As」で名前を付けて保存し、次回は「Saved Capability Sets」から選択してください。未保存の編集内容や実行中セッションは復元しません。
-- 保存先はこの拡張のSecretStorageです。リポジトリ内のファイルには書き出しません。認証情報を含む場合もあるため、不要になったセットは公式UIから削除してください。
-- 設定はServer URL（base pathを含む）ごとに分離します。localhostと127.0.0.1は別扱いです。同じURLを複数ウィンドウで同時編集すると最後の保存が優先されます。
-- 旧版の一時ポート上に残っていた設定は自動移行しません。旧版で保存した内容は事前に公式UIからエクスポートしてください。
-- 保存失敗時はVS Codeにエラーを表示します。SecretStorageが利用可能か確認し、保存操作をやり直してください。保存上限は約5 MBです。
-
-## 開発・検証
+## Development
 
 ```bash
 npm install
@@ -83,6 +59,4 @@ npm run compile
 npm test
 ```
 
-VS Code でこのフォルダを開き、`F5` で **Appium Inspector Lite をデバッグ起動** を選ぶと、ビルド後に Extension Development Host が起動します。
-
-Extension Development Host 上では、`⌘⌥A`（Windows / Linux: `Ctrl+Alt+A`）で Inspector を開けます。
+Open this folder in VS Code and press `F5` to run **Appium Inspector Lite Debug** in an Extension Development Host.

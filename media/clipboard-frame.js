@@ -1,5 +1,8 @@
 (() => {
   const token = __BRIDGE_TOKEN__;
+  const messages = __BRIDGE_LANGUAGE__ === 'ja'
+    ? { copyTimeout: 'クリップボード書き込みがタイムアウトしました。', pasteHint: '鉛筆アイコンを押し、編集する入力欄をクリックしてから貼り付けてください。' }
+    : { copyTimeout: 'Clipboard write timed out.', pasteHint: 'Select the pencil icon, click the field to edit, then paste.' };
   // VS Code normally supplies the parent Webview URL as referrer. Some hosts omit it;
   // in that case, source + unguessable bridge token still authenticate replies.
   const targetOrigin = document.referrer ? new URL(document.referrer).origin : '*';
@@ -8,7 +11,7 @@
   function writeText(text) {
     return new Promise((resolve, reject) => {
       const id = ++sequence;
-      const timer = setTimeout(() => { writes.delete(id); reject(new Error('クリップボード書き込みがタイムアウトしました。')); }, 5000);
+      const timer = setTimeout(() => { writes.delete(id); reject(new Error(messages.copyTimeout)); }, 5000);
       writes.set(id, { resolve, reject, timer });
       parent.postMessage({ bridge: token, type: 'copyText', text: String(text), id }, targetOrigin);
     });
@@ -47,7 +50,7 @@
     if (event.data.type === 'selectAll') { if (field?.isConnected) { field.focus(); field.select(); } return; }
     if (event.data.type === 'copy') { copy(); return; }
     if (event.data.type !== 'pasteText' || typeof event.data.text !== 'string') return;
-    if (!field?.isConnected || field.disabled || field.readOnly) { notify('error', '鉛筆アイコンを押し、編集する入力欄をクリックしてから貼り付けてください。'); return; }
+    if (!field?.isConnected || field.disabled || field.readOnly) { notify('error', messages.pasteHint); return; }
     field.focus();
     const start = field.selectionStart ?? field.value.length, end = field.selectionEnd ?? start;
     const value = field.value.slice(0, start) + event.data.text + field.value.slice(end);
