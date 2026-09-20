@@ -85,6 +85,10 @@
     "test": "npm run compile && node --test tests/*.test.cjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
     "vscode:prepublish": "npm run compile",
     "package": "npx @vscode/vsce package"
   },
@@ -92,6 +96,7 @@
     "@types/node": "^24.13.6",
     "@types/vscode": "^1.96.0",
     "@vscode/vsce": "^4.0.0",
+    "@biomejs/biome": "^2.5.14",
     "typescript": "^7.0.2"
   }
 }

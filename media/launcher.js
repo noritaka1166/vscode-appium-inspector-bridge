@@ -1,10 +1,33 @@
 const vscode = acquireVsCodeApi();
-const $ = id => document.getElementById(id);
-const text = window.appiumInspectorBridgeText || { selectDevice: 'Select a device', noDevices: 'No selectable devices found', checking: 'Checking', connected: 'Connected', disconnected: 'Disconnected', invalidUrl: 'Check the URL (local HTTP only)', managed: 'Extension-managed', external: 'External', unknown: 'Unknown origin', verified: 'Verified', warning: 'Warning', actionRequired: 'Action required', notChecked: 'Not checked', working: 'Working…', managedProcess: 'Extension-managed process', running: 'Running', stopped: 'Stopped' };
+const $ = (id) => document.getElementById(id);
+const text = window.appiumInspectorBridgeText || {
+  selectDevice: 'Select a device',
+  noDevices: 'No selectable devices found',
+  checking: 'Checking',
+  connected: 'Connected',
+  disconnected: 'Disconnected',
+  invalidUrl: 'Check the URL (local HTTP only)',
+  managed: 'Extension-managed',
+  external: 'External',
+  unknown: 'Unknown origin',
+  verified: 'Verified',
+  warning: 'Warning',
+  actionRequired: 'Action required',
+  notChecked: 'Not checked',
+  working: 'Working…',
+  managedProcess: 'Extension-managed process',
+  running: 'Running',
+  stopped: 'Stopped',
+};
 const previous = vscode.getState();
 if (previous?.serverUrl) $('server-url').value = previous.serverUrl;
-$('server-url').onchange = () => { vscode.setState({ serverUrl: $('server-url').value }); send('watchServer'); };
-function send(type) { vscode.postMessage({ type, serverUrl: $('server-url').value }); }
+$('server-url').onchange = () => {
+  vscode.setState({ serverUrl: $('server-url').value });
+  send('watchServer');
+};
+function send(type) {
+  vscode.postMessage({ type, serverUrl: $('server-url').value });
+}
 $('launch').onclick = () => send('startOfficial');
 $('open').onclick = () => send('openOfficial');
 $('reconnect').onclick = () => send('reconnect');
@@ -16,15 +39,25 @@ $('list-devices').onclick = () => send('listDevices');
 $('device-select').onchange = () => {
   $('device-caps').value = '';
   $('copy-caps').disabled = true;
-  if ($('device-select').value) vscode.postMessage({ type: 'deviceCapabilities', deviceId: $('device-select').value });
+  if ($('device-select').value)
+    vscode.postMessage({
+      type: 'deviceCapabilities',
+      deviceId: $('device-select').value,
+    });
 };
-$('copy-caps').onclick = () => vscode.postMessage({ type: 'copyCapabilities', deviceId: $('device-select').value });
+$('copy-caps').onclick = () =>
+  vscode.postMessage({
+    type: 'copyCapabilities',
+    deviceId: $('device-select').value,
+  });
 function showDevices(data) {
   const select = $('device-select');
   select.replaceChildren();
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = data.report.devices.length ? text.selectDevice : text.noDevices;
+  placeholder.textContent = data.report.devices.length
+    ? text.selectDevice
+    : text.noDevices;
   select.append(placeholder);
   for (const device of data.report.devices) {
     const option = document.createElement('option');
@@ -44,16 +77,31 @@ function showCapabilities(data) {
 }
 
 function showConnection(data) {
-  const status = { checking: text.checking, connected: text.connected, disconnected: text.disconnected, invalid: text.invalidUrl };
-  const owner = { managed: text.managed, external: text.external, unknown: text.unknown };
-  $('connection-state').textContent = `${status[data.status]}（${owner[data.owner]}）\n${data.url}`;
+  const status = {
+    checking: text.checking,
+    connected: text.connected,
+    disconnected: text.disconnected,
+    invalid: text.invalidUrl,
+  };
+  const owner = {
+    managed: text.managed,
+    external: text.external,
+    unknown: text.unknown,
+  };
+  $('connection-state').textContent =
+    `${status[data.status]}（${owner[data.owner]}）\n${data.url}`;
   $('connection-state').dataset.status = data.status;
 }
 
 function showEnvironment(data) {
   const results = $('environment-results');
   results.replaceChildren();
-  const labels = { ok: text.verified, warning: text.warning, error: text.actionRequired, skipped: text.notChecked };
+  const labels = {
+    ok: text.verified,
+    warning: text.warning,
+    error: text.actionRequired,
+    skipped: text.notChecked,
+  };
   for (const item of data.report.items) {
     const row = document.createElement('section');
     row.dataset.status = item.status;
@@ -80,7 +128,8 @@ function showLoading(data) {
 }
 
 function showServer(data) {
-  $('server-state').textContent = `${text.managedProcess}: ${data.running ? text.running + ' — ' + data.url : text.stopped}`;
+  $('server-state').textContent =
+    `${text.managedProcess}: ${data.running ? `${text.running} — ${data.url}` : text.stopped}`;
   $('stop').disabled = !data.running;
 }
 
@@ -96,9 +145,11 @@ const messageHandlers = {
   environment: showEnvironment,
   loading: showLoading,
   server: showServer,
-  notice: showNotice
+  notice: showNotice,
 };
 
-window.addEventListener('message', ({ data }) => messageHandlers[data.type]?.(data));
+window.addEventListener('message', ({ data }) =>
+  messageHandlers[data.type]?.(data),
+);
 send('ready');
 send('watchServer');
