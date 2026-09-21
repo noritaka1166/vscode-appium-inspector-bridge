@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-09-21
+
+### Added
+
+- Prefer a workspace-local Appium launcher for environment checks, server startup, and Inspector plugin installation; fall back to the Appium command on `PATH` when none is available.
+
+### Fixed
+
+- Improve Appium command-runner error handling.
+
 ## [0.1.0] - 2026-09-20
 
 Initial public release.
@@ -23,6 +33,16 @@ Initial public release.
 - Require confirmation before stopping a managed server or reloading Inspector.
 
 ## 日本語
+
+### [0.1.1] - 2026-09-21
+
+### 追加
+
+- 環境チェック・Server起動・Inspectorプラグイン導入で、ワークスペース内のAppiumランチャーを優先して利用し、存在しない場合は`PATH`上のAppiumへフォールバック
+
+### 修正
+
+- Appiumコマンドランナーのエラーハンドリングを改善
 
 ### [0.1.0] - 2026-09-20
 
