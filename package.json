@@ -124,10 +124,10 @@
     "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/node": "^24.13.6",
     "@types/vscode": "^1.96.0",
     "@vscode/vsce": "^4.0.0",
-    "@biomejs/biome": "^2.5.14",
     "typescript": "^7.0.2"
   }
 }
